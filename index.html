@@ -1,0 +1,1752 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fast Food Tycoon 3D</title>
+<style>
+:root{--bg:#f6f0e4;--card:#fffaf0;--text:#3b2a1a;--accent:#d9480f;--line:#d9ccb6;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html,body{margin:0;color-scheme:light;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,sans-serif}
+body{display:flex;flex-direction:column;align-items:center;padding:8px;gap:8px}
+h1{font-size:18px;margin:0}
+#w{position:relative;width:100%;max-width:860px;height:min(68vh,700px);height:min(68dvh,700px);min-height:380px;border:4px solid #8a5a2b;border-radius:10px;overflow:hidden;box-sizing:border-box}
+canvas{width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+canvas:active{cursor:grabbing}
+.hud{position:absolute;left:5px;right:5px;display:flex;gap:4px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;align-items:center;z-index:5}
+.tb{width:100%;max-width:860px;display:flex;flex-wrap:wrap;gap:6px;justify-content:center;padding-bottom:max(8px,env(safe-area-inset-bottom,0px))}
+.hud{top:5px}
+.hud::-webkit-scrollbar{display:none}
+.pill{flex:none;white-space:nowrap;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:2px 8px;font-size:11px;font-weight:600;opacity:.94}
+.tb button{flex:none;white-space:nowrap;border-radius:16px;padding:6px 11px;font-size:12px;font-weight:600;opacity:.96}
+#vu,#vd,#camReset{order:99}
+#pan{position:absolute;left:8px;right:8px;bottom:6px;max-height:25%;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;background:var(--card);border:2px solid var(--accent);border-radius:12px;padding:6px 8px;display:none;z-index:10}
+.hd{display:flex;justify-content:space-between;align-items:center;font-weight:700;margin-bottom:6px;gap:8px}
+.bs{display:flex;flex-wrap:wrap;gap:6px}
+button{background:var(--card);color:var(--text);border:2px solid var(--line);border-radius:12px;padding:7px 10px;font-size:13px;cursor:pointer}
+button:disabled{opacity:.5}
+small{opacity:.78;text-align:center;max-width:720px;line-height:1.4}
+</style>
+</head>
+<body>
+<h1>🍔 Fast Food Tycoon 3D</h1>
+<div id="w">
+  <canvas id="c"></canvas>
+  <div class="hud">
+    <span class="pill">💰 <span id="money">300</span> zł</span>
+    <span class="pill" title="Ocena lokalu">⭐ <span id="rate">1.0</span></span>
+    <span class="pill" title="Zapasy · zboże · ryby">📦 <span id="stock">20</span>/<span id="maxst">30</span> · 🌾 <span id="raw">0</span> · 🐟 <span id="fish">0</span></span>
+    <span class="pill" title="Dostawy w drodze · tryb zamawiania">🚚 <span id="pend">0</span> · <span id="autoS">AUTO</span></span>
+    <span class="pill" title="Niezależność · populacja miasta">🏭 <span id="indep">0</span>% · 🏘️ <span id="pop">40</span></span>
+    <span class="pill" title="Obsłużeni klienci · auta">👥 <span id="served">0</span> · 🚗 <span id="cars">0</span></span>
+    <span class="pill" title="Kucharze · kelnerzy · kolejka">👨‍🍳 <span id="nc">1</span> · 🤵 <span id="nw">1</span> · ⏳ <span id="qn">0</span></span>
+  </div>
+  <div id="pan"></div>
+  <div id="renderError" style="display:none;position:absolute;left:8px;right:8px;top:58px;padding:8px;background:#7f1d1d;color:#fff;border-radius:8px;font:12px system-ui;z-index:20"></div>
+</div>
+<div class="tb" id="tb">
+    <button id="bm">🔨 Buduj</button>
+    <button id="stb">👥 Personel</button>
+    <button id="sup">📦 Zaopatrzenie</button>
+    <button id="bb">🏗️ Budynek</button>
+    <button id="rvb">📝 <span id="rv">—</span></button>
+    <button id="jmp">🏭 Zaplecze</button>
+    <button id="prt">⚓ Port</button>
+    <button id="cty">🏙️ Miasto</button>
+    <button id="vu">⬆</button>
+    <button id="vd">⬇</button>
+    <button id="camReset" title="Resetuj kamerę (R)">🎥</button>
+  </div>
+
+<details style="max-width:720px"><summary style="cursor:pointer;text-align:center;opacity:.8">ℹ️ Sterowanie i pomoc</summary><small><b>Kamera 3D:</b> LPM / 1 palec – obrót 360° i pochylenie · PPM / Shift+LPM / 2 palce / WASD – przesuwanie po mapie · Kółko / szczypanie – zoom · <b>R</b> – reset widoku. Kliknij puste pole, by kupić działkę; kliknij przedmiot (ulepszenia, ✋ przenoszenie za darmo, sprzedaż), ścianę kuchni/WC/VIP lub lokalu (przesuwanie za opłatą), 📋 menu albo 👥 Personel.</small></details>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+"use strict";
+
+let industrialUnlocked = false;
+let industrialEmployees = 0;
+
+if (typeof THREE === "undefined") {
+  const box = document.getElementById("renderError");
+  if (box) {
+    box.style.display = "block";
+    box.textContent = "Nie udało się załadować Three.js. Sprawdź połączenie z internetem i odśwież stronę.";
+  }
+  return;
+}
+
+try {
+  let W=20,H=14,LX=0,UY=0,KY=4,VY=5,KX=7,DOORS=[4,5];
+  const GR=34,BASE=18,MW=28,MH=17;
+
+  const B={
+   table:{e:'🍽️',n:'Stolik',c:50},
+   counter:{e:'💵',n:'Kasa',c:90},
+   plant:{e:'🪴',n:'Roślina',c:20},
+   loo:{e:'🚽',n:'Kibel',c:100,w:1},
+   sink:{e:'🚰',n:'Umywalka',c:60,w:1},
+   dryer:{e:'🌬️',n:'Suszarka',c:70,w:1},
+   drive:{e:'🪟',n:'Okno Drive',c:200},
+   vip:{e:'🛋️',n:'Sofa VIP',c:250,v:1},
+   arcade:{e:'🎮',n:'Automat',c:150,v:1},
+   karaoke:{e:'🎤',n:'Karaoke',c:180,v:1},
+   grill:{e:'🍳',n:'Grill',c:150,z:'k'},
+   fryer:{e:'♨️',n:'Frytkownica',c:140,z:'k'},
+   oven:{e:'🔥',n:'Piec',c:200,z:'k'},
+   drinks:{e:'🥤',n:'Automat z napojami',c:90,z:'k'},
+   fridge:{e:'🧊',n:'Chłodnia',c:120,z:'k'},
+   prep:{e:'🔪',n:'Stół roboczy',c:60,z:'k'},
+   gtable:{e:'⛱️',n:'Stolik ogrodowy',c:70,z:'g'},
+   pool:{e:'🏊',n:'Basen',c:500,z:'g'},
+   playground:{e:'🛝',n:'Plac zabaw',c:300,z:'g'},
+   fountain:{e:'⛲',n:'Fontanna',c:150,z:'g'},
+   pspot:{e:'🅿️',n:'Miejsce parkingowe',c:40,z:'p'},
+   meter:{e:'🎫',n:'Parkomat',c:120,z:'p'},
+   wheat:{e:'🌾',n:'Pole pszenicy',c:90,z:'farm'},
+   veg:{e:'🥬',n:'Uprawa warzyw',c:110,z:'farm'},
+   cattle:{e:'🐄',n:'Zagroda hodowlana',c:160,z:'farm'},
+   greenhouse:{e:'🏡',n:'Szklarnia całoroczna',c:210,z:'farm'},
+   silo:{e:'🗼',n:'Silos zbożowy',c:140,z:'farm'},
+   mill:{e:'⚙️',n:'Młyn i piekarnia',c:180,z:'factory'},
+   meatproc:{e:'🥩',n:'Przetwórnia mięsa',c:240,z:'factory'},
+   fryline:{e:'🍟',n:'Linia frytek i przekąsek',c:200,z:'factory'},
+   bottler:{e:'🧃',n:'Rozlewnia napojów',c:170,z:'factory'},
+   logistics:{e:'🚚',n:'Tunel dostaw do lokalu',c:260,z:'factory'},
+   fishdock:{e:'⚓',n:'Przystań rybacka',c:150,z:'port'},
+   boat:{e:'🚤',n:'Kuter rybacki',c:220,z:'port'},
+   smoker:{e:'🐟',n:'Wędzarnia i przetwórnia ryb',c:260,z:'port'},
+   fishmarket:{e:'🏪',n:'Targ rybny',c:190,z:'port'},
+   roadseg:{e:'🛣️',n:'Odcinek asfaltowy',c:110,z:'road'},
+   roundabout:{e:'🔄',n:'Rondo miejskie',c:260,z:'road'},
+   busstop:{e:'🚌',n:'Nowoczesny przystanek',c:180,z:'road'},
+   streetlamp:{e:'💡',n:'Aleja z latarniami',c:90,z:'road'},
+   house:{e:'🏠',n:'Domek jednorodzinny',c:160,z:'city'},
+   tenement:{e:'🏢',n:'Kamienica / Apartamentowiec',c:320,z:'city'},
+   hotel:{e:'🏨',n:'Hotel / Motel',c:420,z:'city'},
+   office:{e:'🏬',n:'Biurowiec',c:380,z:'city'},
+   mall:{e:'🛍️',n:'Centrum handlowe',c:460,z:'city'},
+   skyscraper:{e:'🏙️',n:'Wieżowiec biurowy',c:900,z:'biz'},
+   colony:{e:'🏘️',n:'Kolonia / osiedle',c:650,z:'biz'},
+   exchange:{e:'📈',n:'Giełda papierów wartościowych',c:1800,z:'biz'},
+   assembly:{e:'🏭',n:'Hala montażowa',c:520,z:'factory'},
+   robot:{e:'🦾',n:'Robot przemysłowy',c:260,z:'factory'},
+   conveyor:{e:'➡️',n:'Taśmociąg',c:180,z:'factory'},
+   press:{e:'🔩',n:'Prasa hydrauliczna',c:320,z:'factory'},
+   generator:{e:'⚡',n:'Generator energii',c:240,z:'factory'},
+   warehouse:{e:'📦',n:'Magazyn fabryczny',c:350,z:'factory'}
+  };
+
+  const UP={
+   table:[{k:'tw',e:'🍴',n:'Zastawa',d:'+20% rachunku',c:40},{k:'sp',e:'🧂',n:'Przyprawy',d:'+15% rachunku',c:35},{k:'ch',e:'🪑',n:'Krzesła',d:'szybszy obrót',c:45}],
+   counter:[{k:'tm',e:'💳',n:'Terminal',d:'+5% do kas',c:60},{k:'tr',e:'🎓',n:'Szkolenie',d:'+5% do kas',c:55}],
+   plant:[{k:'fe',e:'🧪',n:'Nawóz',d:'+ocena',c:25},{k:'pt',e:'🏺',n:'Donica',d:'+ocena',c:25}],
+   loo:[{k:'sd',e:'🪑',n:'Deska sedesowa',d:'+2 zł napiwku',c:50},{k:'fl',e:'💧',n:'Spłuczka',d:'krótsza wizyta',c:55},{k:'cl',e:'🧹',n:'Sprzątanie',d:'+ocena',c:60}],
+   sink:[{k:'tp',e:'🚿',n:'Bateria bezdotykowa',d:'+2 zł napiwku',c:45},{k:'so',e:'🧼',n:'Dozownik mydła',d:'+2 zł napiwku',c:40}],
+   dryer:[{k:'pw',e:'⚡',n:'Mocniejszy silnik',d:'krótsza wizyta',c:50},{k:'hp',e:'🌿',n:'Filtr HEPA',d:'+ocena',c:60}],
+   drive:[{k:'sp',e:'🔊',n:'Głośnik',d:'więcej aut',c:80},{k:'fa',e:'⚡',n:'Szybka obsługa',d:'+10% i krótszy czas',c:90}],
+   vip:[{k:'sk',e:'🛋️',n:'Skórzana tapicerka',d:'+25%',c:100},{k:'sz',e:'🍾',n:'Szampan',d:'+30%',c:120},{k:'ch',e:'🤵',n:'Kelner',d:'szybszy obrót',c:110}],
+   arcade:[{k:'g1',e:'🕹️',n:'Nowe gry',d:'+15% rozrywki',c:70},{k:'g2',e:'💺',n:'Fotel gamingowy',d:'+10% rozrywki',c:60}],
+   karaoke:[{k:'k1',e:'🎙️',n:'Mikrofony',d:'+15% rozrywki',c:70},{k:'k2',e:'🔈',n:'Nagłośnienie',d:'+10% rozrywki',c:65}],
+   grill:[{k:'kv',e:'🔥',n:'Mocniejszy palnik',d:'szybsza kuchnia',c:80},{k:'kq',e:'🥩',n:'Lepsze mięso',d:'+8% rachunków',c:90}],
+   fryer:[{k:'kv',e:'⚡',n:'Druga kuweta',d:'szybsza kuchnia',c:75},{k:'kq',e:'🫒',n:'Lepszy olej',d:'+8% rachunków',c:85}],
+   oven:[{k:'kv',e:'🌡️',n:'Termoobieg',d:'szybsza kuchnia',c:100},{k:'kq',e:'🧀',n:'Lepszy ser',d:'+8% rachunków',c:110}],
+   drinks:[{k:'kv',e:'💨',n:'Szybsza pompa',d:'szybsza kuchnia',c:50},{k:'kq',e:'🧊',n:'Kruszarka lodu',d:'+8% rachunków',c:60}],
+   fridge:[{k:'kv',e:'📦',n:'Półki na produkty',d:'szybsza kuchnia',c:60},{k:'kq',e:'❄️',n:'Strefa świeżości',d:'+8% rachunków',c:70}],
+   prep:[{k:'kv',e:'🔪',n:'Ostre noże',d:'szybsza kuchnia',c:40},{k:'kq',e:'🥬',n:'Świeże zioła',d:'+8% rachunków',c:45}],
+   gtable:[{k:'pa',e:'⛱️',n:'Parasol',d:'+15% rachunku',c:40},{k:'po',e:'🛋️',n:'Poduszki',d:'+15% rachunku',c:40}],
+   pool:[{k:'wd',e:'♨️',n:'Podgrzewana woda',d:'+30% atrakcji',c:200},{k:'sl',e:'🛝',n:'Zjeżdżalnia',d:'+30% atrakcji',c:250}],
+   playground:[{k:'sw',e:'🪁',n:'Huśtawki',d:'+15% atrakcji',c:90},{k:'cs',e:'🏰',n:'Zamek do wspinaczki',d:'+15% atrakcji',c:110}],
+   fountain:[{k:'li',e:'💡',n:'Podświetlenie',d:'+10% atrakcji',c:60},{k:'ju',e:'💦',n:'Więcej strumieni',d:'+10% atrakcji',c:70}],
+   pspot:[{k:'rf',e:'🏠',n:'Wiata',d:'+20% opłaty',c:50},{k:'li',e:'💡',n:'Oświetlenie',d:'więcej aut',c:40}],
+   meter:[{k:'ct',e:'💳',n:'Płatność kartą',d:'+25% opłat',c:60},{k:'tf',e:'📈',n:'Wyższa taryfa',d:'+30% opłat',c:70},{k:'ap',e:'📱',n:'Aplikacja',d:'+15% aut',c:90}],
+   wheat:[{k:'ir',e:'💧',n:'Nawadnianie',d:'+35% plonów',c:55},{k:'ft',e:'🧪',n:'Bio-nawóz',d:'+40% plonów',c:75}],
+   veg:[{k:'ir',e:'💧',n:'Zraszacze',d:'+35% plonów',c:65},{k:'ft',e:'🌱',n:'Szklane tunele',d:'+45% plonów',c:85}],
+   cattle:[{k:'fd',e:'🌾',n:'Własna pasza',d:'+40% surowców',c:85},{k:'au',e:'🤖',n:'Automatyczny dojarz',d:'+50% surowców',c:110}],
+   greenhouse:[{k:'ht',e:'🌡️',n:'Ogrzewanie',d:'+45% plonów',c:100},{k:'ld',e:'💡',n:'Doświetlanie LED',d:'+50% plonów',c:130}],
+   silo:[{k:'cp',e:'📦',n:'Nadbudowa',d:'+35 pojemności magazynu',c:75},{k:'dr',e:'🌬️',n:'Suszarnia ziarna',d:'+15% wydajności pól',c:90}],
+   mill:[{k:'sp',e:'⚡',n:'Szybkie żarna',d:'+40% przetwórstwa',c:90},{k:'ql',e:'🥖',n:'Własne drożdże',d:'+50% przetwórstwa',c:120}],
+   meatproc:[{k:'sp',e:'🔪',n:'Linia automatyczna',d:'+45% przetwórstwa',c:110},{k:'ql',e:'❄️',n:'Chłodnia szokowa',d:'+25 pojemności zapasów',c:130}],
+   fryline:[{k:'sp',e:'♨️',n:'Krajalnica przemysłowa',d:'+40% przetwórstwa',c:95},{k:'ql',e:'🫒',n:'Tłocznia oleju',d:'+45% przetwórstwa',c:125}],
+   bottler:[{k:'pp',e:'🚰',n:'Szybkie nalewaki',d:'+40% przetwórstwa',c:85},{k:'sy',e:'🍓',n:'Własne syropy',d:'+45% przetwórstwa',c:115}],
+   logistics:[{k:'cv',e:'🛤️',n:'Szybki taśmociąg',d:'+20% niezależności, szybsze dostawy',c:130},{k:'ex',e:'💰',n:'Eksport nadwyżek',d:'sprzedaż nadmiaru zapasów',c:160}],
+   fishdock:[{k:'cr',e:'🏗️',n:'Dźwig portowy',d:'+40% tempa połowów',c:90},{k:'ic',e:'🧊',n:'Chłodnia portowa',d:'+35 pojemności ryb',c:110}],
+   boat:[{k:'nt',e:'🕸️',n:'Sieci dalekomorskie',d:'+45% połowów ryb',c:110},{k:'en',e:'⚡',n:'Mocniejszy silnik',d:'+45% szybkości kutra',c:130},{k:'sn',e:'📡',n:'Echosonda ławic',d:'+50% połowów',c:150}],
+   smoker:[{k:'sm',e:'🔥',n:'Piece wędzarnicze',d:'+45% przetwórstwa ryb',c:120},{k:'pk',e:'📦',n:'Pakowanie próżniowe',d:'+20% ceny dań rybnych',c:140}],
+   fishmarket:[{k:'st',e:'🎪',n:'Stoiska degustacyjne',d:'+35% dochodu targu',c:100},{k:'ad',e:'📣',n:'Reklama świeżych ryb',d:'+15 populacji miasta',c:120}],
+   roadseg:[{k:'ln',e:'↔️',n:'Dodatkowy pas ruchu',d:'+20% ruchu aut',c:70},{k:'sw',e:'🚶',n:'Szerokie chodniki',d:'+12 populacji',c:65}],
+   skyscraper:[{k:'fl',e:'🏙️',n:'Kolejne 20 pięter',d:'+120 populacji',c:400},{k:'ct',e:'☕',n:'Strefa gastro dla firm',d:'+20% wartości zamówień',c:350},{k:'ad',e:'🍔',n:'Billboard na szczycie',d:'+25% napływu gości',c:300}],
+   colony:[{k:'fl',e:'🧱',n:'Dobudowa bloków',d:'+60 populacji',c:260},{k:'gd',e:'🌳',n:'Park osiedlowy',d:'+40 populacji i ocena',c:220},{k:'ad',e:'🍔',n:'Reklama na klatkach',d:'+20% napływu gości',c:200}],
+   exchange:[{k:'br',e:'📊',n:'Biuro maklerskie',d:'+25 zł na cykl',c:500},{k:'ai',e:'🤖',n:'Algorytm handlowy',d:'+20 zł na cykl',c:700}],
+   roundabout:[{k:'fl',e:'🚦',n:'Inteligentna sygnalizacja',d:'+30% ruchu aut',c:130},{k:'mn',e:'⛲',n:'Pomnik na rondzie',d:'+0.2 oceny lokalu',c:150}],
+   busstop:[{k:'ex',e:'🚌',n:'Linia ekspresowa',d:'+25 populacji',c:100},{k:'sh',e:'🛖',n:'Wiata cyfrowa',d:'+15% napływu gości',c:90}],
+   streetlamp:[{k:'ld',e:'🔆',n:'Oświetlenie LED',d:'+15% ruchu wieczorem',c:55},{k:'tr',e:'🌳',n:'Aleja drzew',d:'+0.15 oceny lokalu',c:60}],
+   house:[{k:'fl',e:'🧱',n:'Nadbudowa piętra',d:'+18 populacji (wyższy dom)',c:95},{k:'gd',e:'🌷',n:'Ogródek i elewacja',d:'+12 populacji i +ocena',c:75},{k:'ad',e:'🍔',n:'Szyld Fast Food na dachu',d:'+15% klientów z dzielnicy',c:110}],
+   tenement:[{k:'fl',e:'🏢',n:'Dodatkowe 2 piętra',d:'+45 populacji (wyższy blok)',c:180},{k:'bl',e:'🪟',n:'Balkony i renowacja',d:'+25 populacji',c:140},{k:'ad',e:'🍔',n:'Billboard na dachu',d:'+20% klientów',c:160}],
+   hotel:[{k:'fl',e:'🏨',n:'Skrzydło apartamentów',d:'+40 populacji i goście VIP',c:220},{k:'sp',e:'🏊',n:'Strefa SPA & klimatyzacja',d:'+30% gości VIP',c:190},{k:'ad',e:'🍔',n:'Neon reklamowy',d:'+25% ruchu turystów',c:200}],
+   office:[{k:'fl',e:'🏬',n:'Kolejne kondygnacje biur',d:'+50 populacji (lunch rush)',c:200},{k:'ct',e:'☕',n:'Karta lunchowa dla firm',d:'+15% wartości zamówień',c:175},{k:'ad',e:'🍔',n:'Ekran LED na fasadzie',d:'+20% zamówień drive/na wynos',c:190}],
+   mall:[{k:'fl',e:'🛍️',n:'Pasaż handlowy +1 poziom',d:'+55 populacji',c:240},{k:'pk',e:'🅿️',n:'Garaż podziemny',d:'+25% ruchu aut',c:210},{k:'ad',e:'🍔',n:'Totem reklamowy',d:'+10% napiwków w okolicy',c:220}]
+  };
+
+  const D=[
+    ['🍔','Burger',12,0,null],
+    ['🍟','Frytki',6,0,null],
+    ['🌭','Hot dog',8,60,null],
+    ['🥤','Cola',4,40,null],
+    ['🍕','Pizza',14,100,null],
+    ['🌮','Taco',10,100,null],
+    ['🍗','Kurczak',11,120,null],
+    ['🍦','Lody',5,70,null],
+    ['🥪','Sub',9,130,null],
+    ['🌯','Burrito',12,150,null],
+    ['🍩','Donut',5,80,null],
+    ['🍿','Popcorn',5,50,null],
+    ['🐟','Fish & Chips',15,90,'fishdock'],
+    ['🍔🐟','Burger Rybny',16,110,'fishdock'],
+    ['🍣','Sushi Box',20,160,'smoker'],
+    ['🍤','Krewetki w tempurze',18,140,'boat'],
+    ['🐠','Łosoś z pieca',22,190,'smoker']
+  ].map(d=>({e:d[0],n:d[1],p:d[2],c:d[3],own:d[3]===0,reqPort:d[4],fish:!!d[4]}));
+  const EQ={
+    Burger:'grill','Hot dog':'grill',Taco:'grill',Burrito:'grill','Burger Rybny':'grill',
+    Frytki:'fryer',Kurczak:'fryer',Donut:'fryer',Popcorn:'fryer','Fish & Chips':'fryer','Krewetki w tempurze':'fryer',
+    Pizza:'oven',Sub:'oven','Łosoś z pieca':'oven',
+    Cola:'drinks',Lody:'drinks',
+    'Sushi Box':'prep'
+  };
+  D.forEach(d=>d.q=EQ[d.n]);
+
+  const $=id=>document.getElementById(id),pk=a=>a[Math.floor(Math.random()*a.length)],clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+  let money=300,served=0,grid=Array.from({length:GR},()=>Array(MW).fill(null)),cust=[],cars=[],fl=[],sp=0,vsp=0,csp=0,gsp=0,asp=0,amb=[],mood=0,revMod=0,revT=75000,revs=[],train=0,pcsp=3000,hudT=0,pcs=[],tz=9;
+  let staff=[{t:'c',x:1.5,y:3.8,job:null,tm:0,it:0,ph:0,hx:0,hy:0},{t:'w',x:4.7,y:5.5,job:null,tm:0,it:0,ph:0,hx:5,hy:6.5}],taken={},panel=null,psig='',last=0;
+  const ZB={KW:4,KH:6,WW:4,WT:10,VX:16};let moving=null,sVip,sWc,sWd,sKit,sVd,sEn;
+  const PAT=45000,sits=c=>['w1','q','ck','rd','eat'].includes(c.st);
+
+  let stock=20,raw=4,fishStock=0,prodT=0,exportT=0;
+
+  /* Południowe działki */
+  const PL=[];for(let i=0;i<8;i++)PL.push({x:(i%2)*10,y:BASE+Math.floor(i/2)*4,w:10,h:4,st:0,c:300+Math.floor(i/2)*150+(i%2)*50});
+  const plotAt=(x,y)=>PL.find(p=>x>=p.x&&x<p.x+p.w&&y>=p.y&&y<p.y+p.h),edgeY=()=>Math.max(BASE,...PL.filter(p=>p.st).map(p=>p.y+p.h))+.4;
+
+  /* Północne działki za domkami */
+  const N_MIN_X=0,N_MAX_X=50,N_MIN_Z=-28,N_MAX_Z=-12;
+  const ngrid={};
+  const NPL=[];
+  for(let i=0;i<10;i++){
+    const col=i%5, row=Math.floor(i/5);
+    NPL.push({id:'np_'+i,x:col*10,z:-20-row*8,w:10,h:8,st:0,c:220+row*140+col*40});
+  }
+  const nPlotAt=(x,z)=>NPL.find(p=>x>=p.x&&x<p.x+p.w&&z>=p.z&&z<p.z+p.h);
+  const nCells=t=>Object.entries(ngrid).filter(([,v])=>v&&v.t===t).map(([k,v])=>{const[x,z]=k.split(',').map(Number);return[x,z,v]});
+  const nCnt=t=>nCells(t).length;
+  const nSum=(t,f)=>nCells(t).reduce((s,c)=>s+f(c[2]),0);
+
+  const FARM_TYPES=['wheat','veg','cattle','greenhouse','silo'];
+  const FACT_TYPES=['mill','meatproc','fryline','bottler','logistics'];
+  const PORT_TYPES=['fishdock','boat','smoker','fishmarket'];
+  const ROAD_TYPES=['roadseg','roundabout','busstop','streetlamp'];
+  const CITY_TYPES=['house','tenement','hotel','office','mall'];
+
+  /* ---------------- PORT RYBACKI NA STAWIE ---------------- */
+  const P_MIN_X=-16,P_MAX_X=-4,P_MIN_Z=5,P_MAX_Z=17;
+  const pgrid={};
+  const PPL=[
+    {id:'pp_0',x:-16,z:5,w:6,h:6,st:0,c:220},
+    {id:'pp_1',x:-10,z:5,w:6,h:6,st:0,c:180},
+    {id:'pp_2',x:-16,z:11,w:6,h:6,st:0,c:260},
+    {id:'pp_3',x:-10,z:11,w:6,h:6,st:0,c:240}
+  ];
+  const pPlotAt=(x,z)=>PPL.find(p=>x>=p.x&&x<p.x+p.w&&z>=p.z&&z<p.z+p.h);
+  const pCells=t=>Object.entries(pgrid).filter(([,v])=>v&&v.t===t).map(([k,v])=>{const[x,z]=k.split(',').map(Number);return[x,z,v]});
+  const pCnt=t=>pCells(t).length;
+  const pSum=(t,f)=>pCells(t).reduce((s,c)=>s+f(c[2]),0);
+
+  const maxFish=()=>20 + pSum('fishdock',c=>20 + 35*U(c,'ic')) + pSum('smoker',c=>15);
+  const fishCatchRate=()=>{
+    const dockMult=1 + pSum('fishdock',c=>.25 + .4*U(c,'cr'));
+    const boats=pSum('boat',c=>1.8*(1+.45*U(c,'nt')+.45*U(c,'en')+.5*U(c,'sn')));
+    return boats*dockMult;
+  };
+  const fishProcessRate=()=>pSum('smoker',c=>1.6*(1+.45*U(c,'sm')));
+  const fishQualityBonus=()=>pSum('smoker',c=>.2*U(c,'pk'));
+
+  /* ---------------- MIASTO I ROZBUDOWA ULIC ---------------- */
+  const cgrid={};
+  const CPL=[
+    {id:'cp_main_w',x:-20,z:-11,w:10,h:8,st:2,c:260,kind:'city'},
+    {id:'cp_main_c',x:-10,z:-11,w:20,h:8,st:2,c:300,kind:'city'},
+    {id:'cp_main_e',x:10,z:-11,w:32,h:8,st:2,c:320,kind:'city'},
+    {id:'cp_road_w',x:-24,z:-2,w:24,h:4,st:0,c:200,kind:'road'},
+    {id:'cp_road_e',x:28,z:-2,w:18,h:4,st:0,c:220,kind:'road'},
+    {id:'cp_west_sub',x:-24,z:-11,w:4,h:8,st:0,c:240,kind:'city'},
+    {id:'cp_east_sub',x:42,z:-11,w:6,h:8,st:0,c:280,kind:'city'},
+    {id:'cp_road_e2',nm:'🛣️ Droga do autostrady 1',x:46,z:-2,w:14,h:4,st:0,c:400,kind:'road',big:1,req:'cp_road_e'},
+    {id:'cp_road_e3',nm:'🛣️ Droga do autostrady 2',x:60,z:-2,w:14,h:4,st:0,c:600,kind:'road',big:1,req:'cp_road_e2'},
+    {id:'cp_road_e4',nm:'🛣️ Dojazd pod autostradę',x:74,z:-2,w:16,h:4,st:0,c:800,kind:'road',big:1,req:'cp_road_e3'},
+    {id:'hw_0',nm:'🛣️ Autostrada odc. 1',x:90,z:-40,w:8,h:10,st:0,c:1950,kind:'hwy',big:1,req:'hw_1'},
+    {id:'hw_1',nm:'🛣️ Autostrada odc. 2',x:90,z:-30,w:8,h:10,st:0,c:1700,kind:'hwy',big:1,req:'hw_2'},
+    {id:'hw_2',nm:'🛣️ Autostrada odc. 3',x:90,z:-20,w:8,h:10,st:0,c:1450,kind:'hwy',big:1,req:'hw_3'},
+    {id:'hw_3',nm:'🛣️ Autostrada odc. 4',x:90,z:-10,w:8,h:10,st:0,c:1200,kind:'hwy',big:1,req:'cp_road_e4'},
+    {id:'hw_4',nm:'🛣️ Autostrada odc. 5',x:90,z:0,w:8,h:10,st:0,c:1200,kind:'hwy',big:1,req:'cp_road_e4'},
+    {id:'hw_5',nm:'🛣️ Autostrada odc. 6',x:90,z:10,w:8,h:10,st:0,c:1450,kind:'hwy',big:1,req:'hw_4'},
+    {id:'hw_6',nm:'🛣️ Autostrada odc. 7',x:90,z:20,w:8,h:10,st:0,c:1700,kind:'hwy',big:1,req:'hw_5'},
+    {id:'hw_7',nm:'🛣️ Autostrada odc. 8',x:90,z:30,w:8,h:10,st:0,c:1950,kind:'hwy',big:1,req:'hw_6'},
+    {id:'rmp_on',nm:'⬆ Wjazd na autostradę',x:80,z:2,w:10,h:4,st:0,c:3000,kind:'ramp',big:1,req:'hw_4'},
+    {id:'rmp_off',nm:'⬇ Zjazd z autostrady',x:80,z:-6,w:10,h:4,st:0,c:3000,kind:'ramp',big:1,req:'hw_3'},
+    {id:'biz_n1',nm:'🏙️ Dzielnica biznesowa N',x:50,z:-16,w:30,h:8,st:0,c:900,kind:'biz',big:1,req:'cp_road_e3'},
+    {id:'biz_s1',nm:'🏙️ Dzielnica biznesowa S',x:50,z:8,w:30,h:8,st:0,c:900,kind:'biz',big:1,req:'cp_road_e3'},
+    {id:'biz_n2',nm:'🏙️ Biznes za autostradą N',x:98,z:-16,w:20,h:12,st:0,c:1500,kind:'biz',big:1,req:'rmp_off'},
+    {id:'biz_s2',nm:'🏙️ Biznes za autostradą S',x:98,z:4,w:20,h:12,st:0,c:1500,kind:'biz',big:1,req:'rmp_on'}
+  ];
+  const cPlotAt=(x,z)=>CPL.find(p=>x>=p.x&&x<p.x+p.w&&z>=p.z&&z<p.z+p.h);
+  const cCells=t=>Object.entries(cgrid).filter(([,v])=>v&&v.t===t).map(([k,v])=>{const[x,z]=k.split(',').map(Number);return[x,z,v]});
+  const cCnt=t=>cCells(t).length;
+  const cSum=(t,f)=>cCells(t).reduce((s,c)=>s+f(c[2]),0);
+
+  function cityPopulation(){
+    const hPop=cSum('house',c=>12 + 18*U(c,'fl') + 12*U(c,'gd'));
+    const tPop=cSum('tenement',c=>32 + 45*U(c,'fl') + 25*U(c,'bl'));
+    const hoPop=cSum('hotel',c=>28 + 40*U(c,'fl'));
+    const ofPop=cSum('office',c=>35 + 50*U(c,'fl'));
+    const mlPop=cSum('mall',c=>40 + 55*U(c,'fl'));
+    const rdPop=cSum('roadseg',c=>6 + 12*U(c,'sw')) + cSum('busstop',c=>15 + 25*U(c,'ex'));
+    const fmPop=pSum('fishmarket',c=>8 + 15*U(c,'ad'));
+    return Math.round(25 + hPop + tPop + hoPop + ofPop + mlPop + rdPop + fmPop + cSum('skyscraper',c=>80+120*U(c,'fl')) + cSum('colony',c=>90+60*U(c,'fl')+40*U(c,'gd')));
+  }
+  const cityTrafficMult=()=>1 + Math.min(2.2, (cityPopulation()-25)/180) + cSum('roadseg',c=>.1+.2*U(c,'ln')) + cSum('roundabout',c=>.25+.3*U(c,'fl')) + cSum('busstop',c=>.15+.15*U(c,'sh')) + cSum('mall',c=>.25*U(c,'pk')) + hwyBonus();
+  const cityVipMult=()=>1 + cSum('hotel',c=>.35 + .3*U(c,'sp'));
+  const cityAdBonus=()=>1 + cSum('house',c=>.15*U(c,'ad')) + cSum('tenement',c=>.2*U(c,'ad')) + cSum('hotel',c=>.25*U(c,'ad')) + cSum('office',c=>.2*U(c,'ad')) + cSum('skyscraper',c=>.25*U(c,'ad')) + cSum('colony',c=>.2*U(c,'ad'));
+  const cityTipBonus=()=>cSum('mall',c=>.1*U(c,'ad'));
+  const cityRatingBonus=()=>cSum('house',c=>.05*U(c,'gd')) + cSum('roundabout',c=>.2*U(c,'mn')) + cSum('streetlamp',c=>.15*U(c,'tr')) + cSum('colony',c=>.05*U(c,'gd'));
+
+  const maxRaw=()=>30 + nSum('silo',c=>25 + 35*U(c,'cp')) + nSum('warehouse',c=>20);
+  const maxStock=()=>30 + nSum('meatproc',c=>15 + 25*U(c,'ql')) + nSum('silo',c=>15) + nSum('logistics',c=>20) + nSum('warehouse',c=>40);
+  const farmRate=()=>{
+    const siloBonus=1 + nSum('silo',c=>.15*U(c,'dr'));
+    const base=nSum('wheat',c=>1.2*(1+.35*U(c,'ir')+.4*U(c,'ft')))
+      +nSum('veg',c=>1.4*(1+.35*U(c,'ir')+.45*U(c,'ft')))
+      +nSum('cattle',c=>1.9*(1+.4*U(c,'fd')+.5*U(c,'au')))
+      +nSum('greenhouse',c=>2.4*(1+.45*U(c,'ht')+.5*U(c,'ld')));
+    return base*siloBonus;
+  };
+  const factoryRate=()=>{
+    return nSum('mill',c=>1.5*(1+.4*U(c,'sp')+.5*U(c,'ql')))
+      +nSum('meatproc',c=>2.0*(1+.45*U(c,'sp')))
+      +nSum('fryline',c=>1.7*(1+.4*U(c,'sp')+.45*U(c,'ql')))
+      +nSum('bottler',c=>1.4*(1+.4*U(c,'pp')+.45*U(c,'sy')));
+  };
+  function independencePct(){
+    const fScore=farmRate()*4.5;
+    const pScore=factoryRate()*5.0;
+    const fishScore=(fishCatchRate()+fishProcessRate())*3.5;
+    const logBonus=nSum('logistics',c=>12 + 20*U(c,'cv'));
+    const hasStockBonus=(stock+fishStock)>0?Math.min(20,(stock+fishStock)*0.45):0;
+    return Math.min(100,Math.round(Math.min(40,fScore)+Math.min(40,pScore)+Math.min(25,fishScore)+logBonus+hasStockBonus));
+  }
+
+  /* Poprawione wykrywanie stref budynku, ogródka i parkingu */
+  const isVip=(x,y)=>x>=ZB.VX&&y>=2&&y<H,isWc=(x,y)=>x<ZB.WW&&y>=ZB.WT&&y<H,isKit=(x,y)=>x<ZB.KW&&y>=2&&y<ZB.KH;
+  const zoneOf=(x,y)=>{
+    if(y>=BASE){
+      const pl=plotAt(x,y);
+      return pl&&pl.st?(pl.st===2?'p':'g'):null;
+    }
+    if(y>=H)return 'g';
+    if(y<1)return null;
+    return isVip(x,y)?'v':isWc(x,y)?'w':isKit(x,y)?'k':'h';
+  };
+  const IZ=k=>B[k].v?'v':B[k].w?'w':B[k].z||'h';
+  const cells=t=>{const r=[];for(let y=0;y<GR;y++)for(let x=0;x<W;x++)if(grid[y][x]&&grid[y][x].t===t)r.push([x,y,grid[y][x]]);return r};
+  const cnt=t=>cells(t).length,U=(c,k)=>(c.u&&c.u[k])||0,sum=(t,f)=>cells(t).reduce((s,c)=>s+f(c[2]),0);
+  const rating=()=>Math.max(.5,rat0()-mood+revMod),pm=()=>1+sum('meter',c=>.15*U(c,'ap'))+sum('pspot',c=>.1*U(c,'li')),rat0=()=>1+sum('plant',c=>.1+.05*U(c,'fe')+.05*U(c,'pt'))+cnt('counter')*.2+sum('loo',c=>.1*U(c,'cl'))+sum('dryer',c=>.1*U(c,'hp'))+cnt('sink')*.05+D.filter(d=>d.own).length*.1+att()*.5+cityRatingBonus();
+  const cb=()=>sum('counter',c=>.15+.05*U(c,'tm')+.05*U(c,'tr'))+cSum('office',c=>.15*U(c,'ct'))+cSum('skyscraper',c=>.2*U(c,'ct'))+cityTipBonus(),pb=()=>sum('plant',c=>.05+.02*U(c,'fe')+.02*U(c,'pt'));
+  const ent=()=>sum('arcade',c=>.4+.15*U(c,'g1')+.1*U(c,'g2'))+sum('karaoke',c=>.4+.15*U(c,'k1')+.1*U(c,'k2'));
+  const tmult=c=>c.t==='vip'?(1+.25*U(c,'sk'))*(1+.3*U(c,'sz')):c.t==='gtable'?(1+.15*U(c,'pa'))*(1+.15*U(c,'po')):(1+.2*U(c,'tw'))*(1+.15*U(c,'sp'));
+  const KT=['grill','fryer','oven','drinks','fridge','prep'],kc=()=>KT.flatMap(t=>cells(t)),ks=()=>1+KT.reduce((s,t)=>s+sum(t,c=>.3+.15*U(c,'kv')),0),kq=()=>KT.reduce((s,t)=>s+sum(t,c=>.08*U(c,'kq')),0),att=()=>sum('pool',c=>.4+.3*U(c,'wd')+.3*U(c,'sl'))+sum('playground',c=>.2+.15*U(c,'sw')+.15*U(c,'cs'))+sum('fountain',c=>.1+.1*U(c,'li')+.1*U(c,'ju'));
+
+  /* ---------- 3D ---------- */
+  const wrap=$('w'),cv=$('c'),renderer=new THREE.WebGLRenderer({canvas:cv,antialias:true});
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+  cv.addEventListener('webglcontextlost',e=>{e.preventDefault();const box=$('renderError');if(box){box.style.display='block';box.textContent='Utracono kontekst WebGL. Odśwież stronę, aby ponowić renderowanie.';}});
+  cv.addEventListener('webglcontextrestored',()=>{const box=$('renderError');if(box)box.style.display='none';resizeGame();});
+  const dark=false;
+  const scene=new THREE.Scene();scene.background=new THREE.Color(dark?'#2b3647':'#dbe8f4');
+  const camera=new THREE.PerspectiveCamera(45,1,.1,500);
+  scene.add(new THREE.AmbientLight(0xffffff,.75));
+  const dl=new THREE.DirectionalLight(0xffffff,.7);dl.position.set(6,12,9);scene.add(dl);
+  const M=(c,o)=>new THREE.MeshLambertMaterial(Object.assign({color:c},o||{}));
+  const add=(g,m,x,y,z)=>{m.position.set(x,y,z);g.add(m);return m};
+  const bx=(g,w,h,d,c,x,y,z,o)=>add(g,new THREE.Mesh(new THREE.BoxGeometry(w,h,d),M(c,o)),x,y,z);
+  const cy=(g,a,b,h,c,x,y,z,s,o)=>add(g,new THREE.Mesh(new THREE.CylinderGeometry(a,b,h,s||16),M(c,o)),x,y,z);
+  const sph=(g,r,c,x,y,z)=>add(g,new THREE.Mesh(new THREE.SphereGeometry(r,12,10),M(c)),x,y,z);
+  function lab(t,bg){
+    const c=document.createElement('canvas'),x=c.getContext('2d'),f='bold 34px system-ui,sans-serif';
+    x.font=f;const w=Math.ceil(x.measureText(t).width)+28;c.width=w;c.height=56;
+    x.font=f;x.fillStyle=bg||'rgba(0,0,0,.65)';x.beginPath();if(x.roundRect)x.roundRect(0,0,w,56,16);else x.rect(0,0,w,56);x.fill();
+    x.fillStyle='#fff';x.textAlign='center';x.textBaseline='middle';x.fillText(t,w/2,30);
+    const tx=new THREE.CanvasTexture(c);tx.minFilter=THREE.LinearFilter;
+    const s=new THREE.Sprite(new THREE.SpriteMaterial({map:tx,transparent:true,depthTest:false}));
+    s.scale.set(w/120,56/120,1);s.renderOrder=10;return s;
+  }
+  const gnd=new THREE.Mesh(new THREE.PlaneGeometry(400,400),M(dark?'#2c3b2a':'#a5c08f'));gnd.rotation.x=-Math.PI/2;gnd.position.set(10,-.06,0);scene.add(gnd);
+  const fz=(x,y)=>y>=H?(DOORS.includes(x)?['#cfcfcf','#c2c2c2']:['#9fcf7a','#92c46d']):isVip(x,y)?['#cdb4e8','#bfa2de']:isWc(x,y)?['#bcd9f5','#a9cdee']:isKit(x,y)?['#eceff1','#dfe4e8']:['#ecd9b0','#e0c797'];
+
+  /* Naprawiona siatka podłogi lokalu i ogródka z wyraźnymi kratkami (fugami) */
+  const tiles={}, bGridLines=new THREE.Group();
+  scene.add(bGridLines);
+  for(let y=1;y<BASE;y++){
+    for(let x=0;x<MW;x++){
+      const m=bx(scene,.96,.1,.96,fz(x,y)[(x+y)%2],x+.5,-.05,y+.5);
+      m.visible=x<W;
+      tiles[x+','+y]=m;
+    }
+  }
+  function buildFloorGrid(){
+    while(bGridLines.children.length)bGridLines.remove(bGridLines.children[0]);
+    for(let y=1;y<BASE;y++){
+      const col=y>=H?'#689f38':'#9c8462';
+      for(let x=0;x<W;x++){
+        bx(bGridLines,1,.015,.03,col,x+.5,.006,y);
+        bx(bGridLines,.03,.015,1,col,x,.006,y+.5);
+      }
+      bx(bGridLines,.03,.015,1,col,W,.006,y+.5);
+    }
+    for(let x=0;x<W;x++)bx(bGridLines,1,.015,.03,'#689f38',x+.5,.006,BASE);
+  }
+  buildFloorGrid();
+
+  /* Główna ulica i pasy */
+  bx(scene,120,.1,2,'#555',10,-.05,0);
+  for(let i=-45;i<65;i+=1.5)bx(scene,.6,.02,.08,'#ddd',i,.01,0);
+
+  const oc='#efe3c8',OH=1.8;
+  const WH=.9,zg=new THREE.Group();scene.add(zg);
+  function buildZW(){
+    while(zg.children.length)zg.remove(zg.children[0]);
+    const{KW,KH,WW,WT,VX}=ZB,tg=(z,m)=>{m.userData.wz=z;return m};
+    const zw=(z,w,d,x,y)=>tg(z,bx(zg,w,WH,d,'#d8c8a8',x,WH/2,y)),po=(z,x,y)=>tg(z,bx(zg,.14,1.1,.14,'#6b4423',x,.55,y)),li=(z,x,y,d)=>tg(z,bx(zg,.14,.12,d,'#6b4423',x,1.1,y));
+    zw('k',KW,.1,KW/2,2);zw('k',KW,.1,KW/2,KH);zw('k',.1,KY-2,KW,(2+KY)/2);zw('k',.1,KH-KY-1,KW,KY+1+(KH-KY-1)/2);po('k',KW,KY);po('k',KW,KY+1);li('k',KW,KY+.5,1.14);
+    zw('w',WW,.1,WW/2,WT);zw('w',.1,H-2-WT,WW,(WT+H-2)/2);zw('w',.1,1,WW,H-.5);po('w',WW,H-2);po('w',WW,H-1);li('w',WW,H-1.5,1.14);
+    zw('v',W-VX,.1,(VX+W)/2,2);zw('v',.1,VY-2,VX,(2+VY)/2);zw('v',.1,H-VY-1,VX,VY+1+(H-VY-1)/2);po('v',VX,VY);po('v',VX,VY+1);li('v',VX,VY+.5,1.14);
+  }
+  const wallN=new THREE.Group(),wallW=new THREE.Group(),wallE=new THREE.Group();scene.add(wallN,wallW,wallE);
+  function buildN(){
+    while(wallN.children.length)wallN.remove(wallN.children[0]);
+    for(let x=0;x<W;x++){
+      if(grid[1][x]&&grid[1][x].t==='drive'){bx(wallN,1,.7,.12,oc,x+.5,1.45,1);continue}
+      bx(wallN,1,OH,.12,oc,x+.5,OH/2,1);
+      if(x%2===0){bx(wallN,.6,.6,.04,'#bde0fe',x+.5,1.1,1.07,{emissive:'#6fa8dc'});bx(wallN,.6,.6,.04,'#bde0fe',x+.5,1.1,.93,{emissive:'#6fa8dc'})}
+      else if(x%4===1)bx(wallN,.5,.7,.03,'#ffb703',x+.5,1.1,1.07,{emissive:'#a86f00'});
+    }
+  }
+  buildN();
+
+  const factWalls=new THREE.Group();scene.add(factWalls);
+  function buildFactWalls(){
+    while(factWalls.children.length)factWalls.remove(factWalls.children[0]);
+    NPL.forEach(p=>{
+      if(p.st!==2)return;
+      const x0=p.x,x1=p.x+p.w,z0=p.z,z1=p.z+p.h,fh=2.1,fc='#b0bec5';
+      const wS=bx(factWalls,p.w,fh,.14,fc,x0+p.w/2,fh/2,z1);
+      const wN=bx(factWalls,p.w,fh,.14,fc,x0+p.w/2,fh/2,z0);
+      const wW=bx(factWalls,.14,fh,p.h,fc,x0,fh/2,z0+p.h/2);
+      const wE=bx(factWalls,.14,fh,p.h,fc,x1,fh/2,z0+p.h/2);
+      wS.userData.side='S';wN.userData.side='N';wW.userData.side='W';wE.userData.side='E';
+      for(let x=x0+1.5;x<x1-1;x+=2){
+        const winS=bx(factWalls,.8,.55,.04,'#81d4fa',x,1.25,z1+.08,{emissive:'#0288d1'});winS.userData.side='S';
+        const winN=bx(factWalls,.8,.55,.04,'#81d4fa',x,1.25,z0-.08,{emissive:'#0288d1'});winN.userData.side='N';
+      }
+      cy(factWalls,.28,.35,3.2,'#546e7a',x0+1.2,1.6,z0+1.2,12);
+      cy(factWalls,.32,.32,.2,'#d9480f',x0+1.2,3.1,z0+1.2,12);
+    });
+  }
+
+  function walls(){
+    wallN.visible=camera.position.z>1;kiosk.visible=wallN.visible;wallW.visible=camera.position.x>0;wallE.visible=camera.position.x<W;
+    factWalls.children.forEach(m=>{
+      if(!m.userData.side)return;
+      if(m.userData.side==='S')m.visible=camera.position.z<m.position.z;
+      else if(m.userData.side==='N')m.visible=camera.position.z>m.position.z;
+      else if(m.userData.side==='W')m.visible=camera.position.x>m.position.x;
+      else if(m.userData.side==='E')m.visible=camera.position.x<m.position.x;
+    });
+  }
+
+  const glass={transparent:true,opacity:.28};
+  const dl1=new THREE.Group(),dr1=new THREE.Group();dl1.position.set(4.07,0,H);dr1.position.set(5.93,0,H);
+  bx(dl1,.86,1.3,.04,'#bde0fe',.43,.65,0,{transparent:true,opacity:.4});bx(dr1,.86,1.3,.04,'#bde0fe',-.43,.65,0,{transparent:true,opacity:.4});scene.add(dl1,dr1);
+  let da=0;
+  function doors(){let n=0;for(const c of cust)if(c.y>H-1.4&&c.y<H+2.4&&Math.abs(c.x-DOORS[1])<1.4)n=1;da+=((n?1.4:0)-da)*.15;dl1.rotation.y=da;dr1.rotation.y=-da}
+  const shell=new THREE.Group(),deco=new THREE.Group();scene.add(shell,deco);
+  function buildShell(){
+   const D0=DOORS[0],D1=DOORS[1]+1;
+   for(const g of[shell,deco,wallW,wallE])while(g.children.length)g.remove(g.children[0]);
+   const t=m=>{m.userData.wz='b';return m},fc=(w,d,x,z)=>bx(deco,w,.45,d,'#f5f5f5',x,.23,z);
+   t(bx(wallW,.12,OH,H-1,oc,0,OH/2,(1+H)/2));t(bx(wallE,.12,OH,H-1,oc,W,OH/2,(1+H)/2));
+   for(let z=2.5;z<H-1;z+=2)[wallW,wallE].forEach((g,i)=>{[i?W-.07:.07,i?W+.07:-.07].forEach(x=>t(bx(g,.04,.6,.6,'#bde0fe',x,1.1,z,{emissive:'#6fa8dc'})))});
+   bx(deco,W,.12,.08,'#8a5a2b',W/2,.06,1);
+   t(bx(shell,D0,.7,.12,oc,D0/2,.35,H));t(bx(shell,W-D1,.7,.12,oc,(D1+W)/2,.35,H));
+   bx(deco,D0-.2,.6,.04,'#bde0fe',D0/2,1,H,glass);bx(deco,W-D1-.2,.6,.04,'#bde0fe',(D1+W)/2,1,H,glass);
+   bx(deco,.14,1.6,.14,'#6b4423',D0,.8,H);bx(deco,.14,1.6,.14,'#6b4423',D1,.8,H);bx(deco,2.2,.16,.2,'#6b4423',(D0+D1)/2,1.62,H);
+   bx(deco,2,.02,.9,'#8b1e2d',(D0+D1)/2,.01,H-.5);
+   dl1.position.set(D0+.07,0,H);dr1.position.set(D1-.07,0,H);
+   fc(D0,.06,D0/2,BASE);fc(W-D1,.06,(D1+W)/2,BASE);fc(.06,BASE-H,0,(H+BASE)/2);fc(.06,BASE-H,W,(H+BASE)/2);
+  }
+  [1,7,13,19,25].forEach(x=>{cy(scene,.04,.04,2,'#444',x,1,-1.3,8);sph(scene,.12,'#fff3b0',x,2.05,-1.3)});
+  const sg=(t,bg,x,y,z)=>{const s=lab(t,bg);s.position.set(x,y,z);scene.add(s);return s};
+  sEn=sg('🚪 WEJŚCIE','rgba(138,90,43,.9)',5,2.05,H);sVip=sg('👑 VIP','rgba(123,44,191,.9)',18,1.3,2.5);sWc=sg('🚻 WC','rgba(28,90,150,.9)',2,1.3,H-3.6);
+  sWd=sg('🚻','rgba(28,90,150,.9)',4,1.55,H-1.5);sKit=sg('🍳 KUCHNIA','rgba(90,90,90,.9)',2,1.3,2.5);sg('🌳 OGRÓDEK','rgba(46,125,50,.9)',10,1.2,BASE);sVd=sg('👑','rgba(123,44,191,.9)',16,1.55,5.5);
+  function applyZones(){buildZW();buildFloorGrid();for(const k in tiles){const q=k.split(',').map(Number);tiles[k].material.color.set(fz(q[0],q[1])[(q[0]+q[1])%2]);tiles[k].visible=q[0]<W}
+    sEn.position.set(DOORS[1],2.05,H);
+    sVip.position.set((ZB.VX+W)/2,1.3,2.5);sWc.position.set(ZB.WW/2,1.3,ZB.WT+.4);sWd.position.set(ZB.WW,1.55,H-1.5);sKit.position.set(ZB.KW/2,1.3,2.5);sVd.position.set(ZB.VX,1.55,VY+.5)}
+  buildShell();applyZones();
+  const bs=lab('🍔 FAST FOOD','rgba(217,72,15,.95)');bs.scale.multiplyScalar(1.7);bs.position.set(10,2.6,1);scene.add(bs);
+  const kiosk=new THREE.Group();bx(kiosk,1.4,.9,.06,'#222',0,1.15,0);bx(kiosk,1.3,.12,.07,'#d9480f',0,1.7,0);bx(kiosk,1.2,.7,.03,'#f5e6c8',0,1.12,.04,{emissive:'#3a2a10'});
+  const kl=lab('📋 MENU 🍔','rgba(217,72,15,.95)');kl.position.set(0,1.95,.1);kiosk.add(kl);
+  kiosk.position.set(7.5,0,1.1);kiosk.userData.menu=1;scene.add(kiosk);
+  function growB(){roadG.position.x=W-20;buildShell();applyZones();buildN();bs.position.x=W/2;camCtrl.tx=W/2;kiosk.position.x=KX+.5;sw.position.x=DOORS[1];
+   for(let y=0;y<GR;y++)for(let x=0;x<MW;x++){const c=grid[y][x];if(c&&c.t!=='drive'&&y<H){c.rot=orient(x,y,c.t);syncCell(x,y)}}}
+
+  /* Okolice */
+  let sd=7;const rnd=()=>(sd=(sd*9301+49297)%233280)/233280;
+  const tree=(x,z,s)=>{const g=new THREE.Group();cy(g,.1*s,.14*s,.8*s,'#6b4423',0,.4*s,0,6);add(g,new THREE.Mesh(new THREE.ConeGeometry(.6*s,1.4*s,8),M('#2e7d32')),0,1.3*s,0);add(g,new THREE.Mesh(new THREE.ConeGeometry(.45*s,1.1*s,8),M('#388e3c')),0,1.9*s,0);g.position.set(x,0,z);scene.add(g)};
+  for(let i=0;i<150;i++){
+    const x=-32+rnd()*92,z=-45+rnd()*95;
+    if((x>-3&&x<31&&z>-3&&z<GR+1)||(z>-4&&z<4)||(x>22&&x<46&&z>2&&z<20)||(x>-18&&x<-3&&z>4&&z<19)||(z<-2&&z>-13&&x>-26&&x<49)||(x>-4&&x<34&&z>-32&&z<-10)||(x>44&&z>-20&&z<20))continue;
+    tree(x,z,.8+rnd()*.8);
+  }
+
+  bx(scene,2.2,.04,8,'#6d685f',14,-.03,-8);
+  sg('🛣️ AUTOSTRADA','rgba(21,101,192,.92)',94,3,-43);sg('🏙️ DZIELNICA BIZNESOWA','rgba(21,101,192,.92)',65,3,-4);
+  sg('🚜 ZAPLECZE ROLNO-FABRYCZNE','rgba(46,125,50,.92)',14,2.1,-11.5);
+  sg('🏙️ DZIELNICA MIEJSKA','rgba(21,101,192,.92)',4,2.8,-7);
+
+  const roadG=new THREE.Group();scene.add(roadG);
+  bx(roadG,12,.06,14,'#444',29,-.03,13);
+  [10,16].forEach(z=>{for(let i=0;i<6;i++){bx(roadG,.06,.02,2.8,'#fff',23+i*2,.01,z);if(i<5&&rnd()<.7){const c=carMesh();c.children[0].material.color.set(pk(['#e63946','#457b9d','#f4a261','#2a9d8f','#6a4c93','#eeeeee']));c.rotation.y=Math.PI/2;c.position.set(24+i*2,0,z);roadG.add(c)}}});
+  {const ps=lab('🅿️ PARKING','rgba(21,101,192,.9)');ps.position.set(29,1.6,13);roadG.add(ps)}
+
+  const pd2=cy(scene,6.4,6.4,.06,'#0288d1',-10,-.02,11,32,{emissive:'#01579b'});
+  cy(scene,5.7,5.7,.07,'#29b6f6',-10,-.015,11,32,{emissive:'#0277bd'});
+  sg('⚓ PORT RYBACKI','rgba(1,87,155,.95)',-10,2.2,5);
+
+  [[-30,-52,22,8],[10,-62,30,10],[50,-55,24,7],[-55,0,16,6]].forEach(h=>{const m=sph(scene,1,'#7cb06a',h[0],-1,h[1]);m.scale.set(h[2],h[3],h[2]*.6)});
+  bx(scene,2,.08,.9,'#37474f',-4,1.8,2);[-4.9,-3.1].forEach(x=>bx(scene,.06,1.8,.06,'#555',x,.9,2.3));bx(scene,1.4,.1,.35,'#8d6e63',-4,.45,2.2);sg('🚌 PRZYSTANEK','rgba(0,0,0,.6)',-4,2.3,2);
+  const sw=bx(scene,2,.1,GR-BASE,'#cfcfcf',5,-.04,(BASE+GR)/2);
+
+  /* Południowe działki z siatką kratek */
+  const sGridLines=new THREE.Group();scene.add(sGridLines);
+  function plotVis(p){p.m.material.color.set(['#c9b68a','#9fcf7a','#6f7378'][p.st]);p.s.visible=!p.st}
+  PL.forEach(p=>{
+    p.m=bx(scene,p.w,.1,p.h,'#c9b68a',p.x+p.w/2,-.05,p.y+p.h/2);
+    p.s=lab('🔒 Działka '+p.c+' zł','rgba(90,60,20,.9)');
+    p.s.position.set(p.x+p.w/2,.9,p.y+p.h/2);
+    scene.add(p.s);
+    plotVis(p);
+    for(let z=p.y;z<p.y+p.h;z++){
+      for(let x=p.x;x<p.x+p.w;x++){
+        bx(sGridLines,1,.015,.03,'#5c5243',x+.5,.006,z);
+        bx(sGridLines,.03,.015,1,'#5c5243',x,.006,z+.5);
+      }
+    }
+  });
+
+  /* ---------------- SIATKA 3D PÓL I FABRYK ZA DOMKAMI ---------------- */
+  const nTileMeshes={}, nGridLines=new THREE.Group();
+  scene.add(nGridLines);
+
+  function nTileColor(x,z,st){
+    const checker=(Math.abs(x)+Math.abs(z))%2;
+    if(st===1)return checker?'#6b8e23':'#7ca12b';
+    if(st===2)return checker?'#90a4ae':'#78909c';
+    return checker?'#b8aa8c':'#c7ba9c';
+  }
+  function buildNorthGrid(){
+    for(const k in nTileMeshes){scene.remove(nTileMeshes[k]);delete nTileMeshes[k]}
+    while(nGridLines.children.length)nGridLines.remove(nGridLines.children[0]);
+    for(let z=N_MIN_Z;z<N_MAX_Z;z++){
+      for(let x=N_MIN_X;x<N_MAX_X;x++){
+        const p=nPlotAt(x,z),st=p?p.st:0;
+        const m=bx(scene,.96,.08,.96,nTileColor(x,z,st),x+.5,-.04,z+.5);
+        nTileMeshes[x+','+z]=m;
+        const lCol=st===1?'#4e6916':st===2?'#455a64':'#8d7e60';
+        bx(nGridLines,1,.015,.03,lCol,x+.5,.005,z);
+        bx(nGridLines,.03,.015,1,lCol,x,.005,z+.5);
+      }
+    }
+    for(let x=N_MIN_X;x<N_MAX_X;x++)bx(nGridLines,1,.015,.03,'#8d7e60',x+.5,.005,N_MAX_Z);
+    for(let z=N_MIN_Z;z<N_MAX_Z;z++)bx(nGridLines,.03,.015,1,'#8d7e60',N_MAX_X,.005,z+.5);
+  }
+  function nPlotVis(p){
+    if(Number(p.id.split('_')[1])>=6&&!industrialUnlocked){
+      p.s.visible=true;
+      return;
+    }
+    p.s.visible=!p.st;
+    for(let z=p.z;z<p.z+p.h;z++){
+      for(let x=p.x;x<p.x+p.w;x++){
+        const m=nTileMeshes[x+','+z];
+        if(m)m.material.color.set(nTileColor(x,z,p.st));
+      }
+    }
+    buildFactWalls();
+  }
+  buildNorthGrid();
+  NPL.forEach(p=>{
+    const isInd=Number(p.id.split('_')[1])>=6;
+    p.s=lab(isInd?'🏭 Strefa przemysłowa':'🔒 Działka '+p.c+' zł',isInd?'rgba(140,55,20,.92)':'rgba(60,90,30,.92)');
+    p.s.position.set(p.x+p.w/2,.95,p.z+p.h/2);
+    scene.add(p.s);
+    nPlotVis(p);
+  });
+
+  /* ---------------- SIATKA 3D PORTU RYBACKIEGO NA STAWIE ---------------- */
+  const pTileMeshes={}, pGridLines=new THREE.Group();
+  scene.add(pGridLines);
+
+  function buildPortGrid(){
+    for(const k in pTileMeshes){scene.remove(pTileMeshes[k]);delete pTileMeshes[k]}
+    while(pGridLines.children.length)pGridLines.remove(pGridLines.children[0]);
+    for(let z=P_MIN_Z;z<P_MAX_Z;z++){
+      for(let x=P_MIN_X;x<P_MAX_X;x++){
+        const p=pPlotAt(x,z);
+        const checker=(Math.abs(x)+Math.abs(z))%2;
+        const col=!p||p.st===0?(checker?'#0277bd':'#0288d1'):(checker?'#8d6e63':'#795548');
+        const m=bx(scene,.95,.08,.95,col,x+.5,.02,z+.5,{transparent:!p||p.st===0,opacity:!p||p.st===0?0.45:1});
+        pTileMeshes[x+','+z]=m;
+        const lCol=!p||p.st===0?'#81d4fa':'#4e342e';
+        bx(pGridLines,1,.02,.04,lCol,x+.5,.065,z);
+        bx(pGridLines,.04,.02,1,lCol,x,.065,z+.5);
+      }
+    }
+    for(let x=P_MIN_X;x<P_MAX_X;x++)bx(pGridLines,1,.02,.04,'#81d4fa',x+.5,.065,P_MAX_Z);
+    for(let z=P_MIN_Z;z<P_MAX_Z;z++)bx(pGridLines,.04,.02,1,'#81d4fa',P_MAX_X,.065,z+.5);
+  }
+  function pPlotVis(p){
+    p.s.visible=!p.st;
+    for(let z=p.z;z<p.z+p.h;z++){
+      for(let x=p.x;x<p.x+p.w;x++){
+        const m=pTileMeshes[x+','+z];if(!m)continue;
+        const checker=(Math.abs(x)+Math.abs(z))%2;
+        m.material.color.set(!p.st?(checker?'#0277bd':'#0288d1'):(checker?'#8d6e63':'#795548'));
+        m.material.transparent=!p.st;
+        m.material.opacity=!p.st?0.45:1;
+      }
+    }
+  }
+  buildPortGrid();
+  PPL.forEach(p=>{
+    p.s=lab('⚓ Pomost '+p.c+' zł','rgba(1,87,155,.92)');
+    p.s.position.set(p.x+p.w/2,1.0,p.z+p.h/2);
+    scene.add(p.s);
+    pPlotVis(p);
+  });
+
+  /* ---------------- SIATKA 3D MIASTA I ROZBUDOWY ULIC ---------------- */
+  const cTileMeshes={}, cGridLines=new THREE.Group();
+  scene.add(cGridLines);
+
+  function buildCityGrid(){
+    for(const k in cTileMeshes){scene.remove(cTileMeshes[k]);delete cTileMeshes[k]}
+    while(cGridLines.children.length)cGridLines.remove(cGridLines.children[0]);
+    CPL.forEach(p=>{
+      if(p.big){
+        cTileMeshes['B'+p.id]=bx(scene,p.w-.04,.06,p.h-.04,cCol(p),p.x+p.w/2,-.03,p.z+p.h/2);
+        if(p.kind==='biz'){for(let z=p.z;z<=p.z+p.h;z++)bx(cGridLines,p.w,.015,.03,'#78909c',p.x+p.w/2,.005,z);for(let x=p.x;x<=p.x+p.w;x++)bx(cGridLines,.03,.015,p.h,'#78909c',x,.005,p.z+p.h/2)}
+        return;
+      }
+      for(let z=p.z;z<p.z+p.h;z++){
+        for(let x=p.x;x<p.x+p.w;x++){
+          const k=x+','+z;
+          if(cTileMeshes[k])continue;
+          const checker=(Math.abs(x)+Math.abs(z))%2;
+          const isRd=p.kind==='road';
+          const col=!p.st?(checker?'#b0bec5':'#cfd8dc'):isRd?(checker?'#424242':'#4f4f4f'):(checker?'#a5d6a7':'#9ccc65');
+          const m=bx(scene,.96,.06,.96,col,x+.5,-.03,z+.5);
+          cTileMeshes[k]=m;
+          const lCol=!p.st?'#78909c':isRd?'#757575':'#689f38';
+          bx(cGridLines,1,.015,.03,lCol,x+.5,.005,z);
+          bx(cGridLines,.03,.015,1,lCol,x,.005,z+.5);
+        }
+      }
+    });
+  }
+  const cCol=p=>!p.st?'#b0bec5':['road','ramp'].includes(p.kind)?'#4a4a4a':p.kind==='hwy'?'#3b4a52':'#b8c4cb';
+  const hwG=new THREE.Group();scene.add(hwG);const hcars=[];let hcT=0,exT=3000,mkt=1;
+  const cOwn=id=>{const q=CPL.find(r=>r.id===id);return !!(q&&q.st)};
+  const hwyConn=()=>cOwn('cp_road_e4')&&(cOwn('rmp_on')||cOwn('rmp_off'));
+  const hwyBonus=()=>{if(!cOwn('cp_road_e4'))return 0;const rp=(cOwn('rmp_on')?.45:0)+(cOwn('rmp_off')?.45:0);return rp?rp+.12*CPL.filter(q=>q.kind==='hwy'&&q.st).length:0};
+  function hwyDeco(){
+    while(hwG.children.length)hwG.remove(hwG.children[0]);
+    CPL.forEach(q=>{if(!q.st)return;
+      if(q.kind==='hwy'){for(let z=q.z+.5;z<q.z+q.h;z+=2){bx(hwG,.12,.02,1,'#fff',q.x+q.w/2,.01,z);bx(hwG,.1,.02,.9,'#ffd54f',q.x+1,.01,z);bx(hwG,.1,.02,.9,'#ffd54f',q.x+q.w-1,.01,z)}[q.x+.1,q.x+q.w-.1].forEach(x=>bx(hwG,.14,.4,q.h,'#b0bec5',x,.2,q.z+q.h/2))}
+      if(q.kind==='road')for(let x=q.x+.5;x<q.x+q.w;x+=2)bx(hwG,1,.02,.1,'#fff',x,.01,q.z+q.h/2);
+      if(q.kind==='ramp'){for(let x=q.x+.5;x<q.x+q.w;x+=2)bx(hwG,1,.02,.12,'#fff',x,.01,q.z+q.h/2);const l=lab(q.id==='rmp_on'?'⬆ WJAZD':'⬇ ZJAZD','rgba(21,101,192,.92)');l.position.set(q.x+q.w/2,1.3,q.z+q.h/2);hwG.add(l)}
+    });
+  }
+  function hwyTick(dt){
+    if(hwyConn()){hcT-=dt;if(hcT<=0&&hcars.length<40){hcT=700+Math.random()*900;const sc=CPL.filter(q=>q.kind==='hwy'&&q.st);
+      if(sc.length){const lane=Math.floor(Math.random()*4),dir=lane<2?1:-1,m=carMesh(),zs=Math.min(...sc.map(q=>q.z)),ze=Math.max(...sc.map(q=>q.z+q.h));
+        m.children[0].material.color.set(pk(['#e63946','#457b9d','#f4a261','#2a9d8f','#6a4c93','#eeeeee']));m.rotation.y=dir>0?Math.PI/2:-Math.PI/2;m.position.set(91.2+lane*1.55,0,dir>0?zs:ze);scene.add(m);hcars.push({m,dir,zs,ze})}}}
+    for(let i=hcars.length-1;i>=0;i--){const c=hcars[i];c.m.position.z+=c.dir*dt/1000*11;if(c.m.position.z>c.ze+1||c.m.position.z<c.zs-1){scene.remove(c.m);hcars.splice(i,1)}}
+    exT-=dt;if(exT<=0){exT=8000;const ex=cCells('exchange');if(ex.length){mkt=Math.max(.5,Math.min(2.2,mkt*(1+(Math.random()-.5)*.3)));const v=Math.round(cSum('exchange',c=>30+25*U(c,'br')+20*U(c,'ai'))*(1+.12*cCnt('skyscraper'))*mkt);money+=v;pop(ex[0][0]+.5,ex[0][1]+.5,'📈 Giełda +'+v+' zł (indeks '+mkt.toFixed(2)+')','rgba(27,94,32,.92)',1.1);ui()}}
+  }
+  function cPlotVis(p){
+    p.s.visible=!p.st;
+    if(p.big){const bm=cTileMeshes['B'+p.id];if(bm)bm.material.color.set(cCol(p));hwyDeco();return}
+    const isRd=p.kind==='road';
+    for(let z=p.z;z<p.z+p.h;z++){
+      for(let x=p.x;x<p.x+p.w;x++){
+        const m=cTileMeshes[x+','+z];if(!m)continue;
+        const checker=(Math.abs(x)+Math.abs(z))%2;
+        m.material.color.set(!p.st?(checker?'#b0bec5':'#cfd8dc'):isRd?(checker?'#424242':'#4f4f4f'):(checker?'#a5d6a7':'#9ccc65'));
+      }
+    }
+  }
+  buildCityGrid();
+  CPL.forEach(p=>{
+    p.s=lab((p.nm||(p.kind==='road'?'🛣️ Ulice ':'🏙️ Działka '))+' '+p.c+' zł','rgba(21,101,192,.92)');
+    p.s.position.set(p.x+p.w/2,1.0,p.z+p.h/2);
+    scene.add(p.s);
+    cPlotVis(p);
+  });
+
+  function waiterMesh(){const g=new THREE.Group();cy(g,.13,.17,.36,'#263238',0,.2,0,10);bx(g,.16,.14,.02,'#fff',0,.3,.12);sph(g,.13,'#f1c27d',0,.5,0);bx(g,.07,.04,.02,'#c62828',0,.38,.14);return g}
+  const itemRoot=new THREE.Group(), nItemRoot=new THREE.Group(), pItemRoot=new THREE.Group(), cItemRoot=new THREE.Group();
+  scene.add(itemRoot,nItemRoot,pItemRoot,cItemRoot);
+  const mark=new THREE.Mesh(new THREE.BoxGeometry(.96,.06,.96),M('#ff6b35',{transparent:true,opacity:.6}));mark.visible=false;scene.add(mark);
+
+  const MODEL={
+   table:g=>{cy(g,.05,.05,.4,'#6b4423',0,.2,0);cy(g,.4,.4,.06,'#a0652d',0,.43,0,20);cy(g,.12,.12,.02,'#fff',0,.47,0);[[.42,1],[-.42,-1]].forEach(a=>{bx(g,.32,.05,.3,'#c9a46b',0,.27,a[0]);bx(g,.32,.3,.05,'#c9a46b',0,.43,a[0]+.15*a[1]);bx(g,.06,.25,.06,'#6b4423',0,.12,a[0])})},
+   counter:g=>{bx(g,.9,.55,.5,'#c0392b',0,.28,0);bx(g,.95,.05,.55,'#eee',0,.58,0);bx(g,.25,.18,.2,'#333',.2,.68,-.1)},
+   plant:g=>{cy(g,.14,.1,.22,'#b5651d',0,.11,0);sph(g,.22,'#2e8b3d',0,.42,0);sph(g,.14,'#3fae52',.1,.6,.04)},
+   loo:g=>{bx(g,.4,.3,.4,'#fff',0,.15,-.12);bx(g,.4,.55,.14,'#f2f2f2',0,.42,-.38);cy(g,.2,.15,.1,'#fff',0,.35,-.1)},
+   sink:g=>{bx(g,.6,.45,.36,'#ddd',0,.22,-.3);bx(g,.5,.05,.3,'#9fd3f0',0,.47,-.28);cy(g,.03,.03,.2,'#888',0,.6,-.4);bx(g,.5,.3,.03,'#bde0fe',0,.8,-.47)},
+   dryer:g=>{bx(g,.4,.3,.14,'#ccc',0,.85,-.42);bx(g,.3,.05,.06,'#4fc3f7',0,.67,-.36,{emissive:'#4fc3f7'})},
+   drive:g=>{bx(g,.9,.8,.7,'#f4a261',0,.4,-.05);bx(g,.95,.06,.9,'#c0392b',0,.85,.02);bx(g,.5,.3,.05,'#8ecae6',0,.55,.31,{emissive:'#4a90b8'});bx(g,.9,.04,.18,'#8d5524',0,.45,.4)},
+   vip:g=>{bx(g,.9,.3,.45,'#7b2cbf',0,.15,-.12);bx(g,.9,.5,.14,'#9d4edd',0,.45,-.38);bx(g,.12,.35,.45,'#6a1fa8',-.45,.3,-.12);bx(g,.12,.35,.45,'#6a1fa8',.45,.3,-.12)},
+   arcade:g=>{bx(g,.5,.95,.36,'#222',0,.48,-.3);bx(g,.4,.3,.04,'#00e5ff',0,.7,-.11,{emissive:'#00a5bf'});bx(g,.4,.06,.2,'#e91e63',0,.42,-.05)},
+   karaoke:g=>{bx(g,.6,.6,.3,'#111',0,.3,-.33);bx(g,.4,.2,.04,'#00e676',0,.45,-.17,{emissive:'#00a050'});cy(g,.025,.025,.6,'#aaa',.2,.7,0,8);sph(g,.08,'#e91e63',.2,1.02,0)},
+   grill:g=>{bx(g,.8,.5,.5,'#555',0,.25,-.2);bx(g,.76,.04,.46,'#222',0,.52,-.2);bx(g,.1,.06,.05,'#c0392b',.2,.4,.06);bx(g,.8,.1,.45,'#aaa',0,1.15,-.25)},
+   fryer:g=>{bx(g,.6,.5,.5,'#777',0,.25,-.22);bx(g,.5,.1,.4,'#f4c430',0,.55,-.22,{emissive:'#a68000'});bx(g,.3,.04,.12,'#222',0,.62,-.05)},
+   oven:g=>{bx(g,.8,.8,.5,'#b0b0b0',0,.4,-.25);bx(g,.6,.4,.04,'#ff7043',0,.4,.01,{emissive:'#b03000'});bx(g,.5,.04,.04,'#333',0,.65,.04)},
+   drinks:g=>{bx(g,.5,.95,.4,'#1565c0',0,.48,-.28);bx(g,.3,.25,.04,'#e3f2fd',0,.75,-.07,{emissive:'#90caf9'});cy(g,.04,.04,.15,'#ccc',0,.38,-.1)},
+   fridge:g=>{bx(g,.6,1.15,.5,'#eceff1',0,.58,-.23);bx(g,.04,.4,.04,'#555',.22,.75,.03)},
+   prep:g=>{bx(g,.9,.5,.5,'#cfd8dc',0,.25,-.22);bx(g,.95,.04,.54,'#90a4ae',0,.52,-.22);bx(g,.3,.03,.2,'#8d6e63',.15,.56,-.22)},
+   gtable:g=>{cy(g,.03,.03,1.1,'#888',0,.55,0,8);cy(g,.4,.4,.05,'#d7b98e',0,.45,0,20);add(g,new THREE.Mesh(new THREE.ConeGeometry(.7,.3,12),M('#e63946')),0,1.15,0);[[.42,1],[-.42,-1]].forEach(a=>{bx(g,.32,.05,.3,'#c9a46b',0,.27,a[0]);bx(g,.32,.3,.05,'#c9a46b',0,.43,a[0]+.15*a[1]);bx(g,.06,.25,.06,'#6b4423',0,.12,a[0])})},
+   pool:g=>{bx(g,1,.12,1,'#e0e0e0',0,.06,0);bx(g,.84,.1,.84,'#29b6f6',0,.12,0,{emissive:'#0d7bb0'});bx(g,.04,.3,.04,'#bbb',.35,.25,.35);bx(g,.04,.3,.04,'#bbb',.35,.25,.25)},
+   playground:g=>{bx(g,.9,.04,.9,'#8d6e63',0,.02,0);cy(g,.03,.03,.9,'#c0392b',-.3,.45,-.2,6);cy(g,.03,.03,.9,'#c0392b',.3,.45,-.2,6);bx(g,.7,.04,.04,'#c0392b',0,.9,-.2);const s=bx(g,.2,.04,.7,'#ffca28',0,.4,.2);s.rotation.x=-.5;bx(g,.1,.04,.1,'#2a9d8f',-.15,.45,-.2)},
+   fountain:g=>{cy(g,.42,.46,.18,'#bbb',0,.09,0,24);cy(g,.34,.34,.05,'#4fc3f7',0,.18,0,24,{emissive:'#0d7bb0'});cy(g,.05,.05,.45,'#ccc',0,.38,0,8);sph(g,.12,'#81d4fa',0,.65,0)},
+   pspot:g=>{bx(g,.04,.02,.98,'#fff',-.48,.02,0);bx(g,.04,.02,.98,'#fff',.48,.02,0);bx(g,.92,.02,.04,'#fff',0,.02,.48)},
+   meter:g=>{cy(g,.04,.04,.7,'#455a64',0,.35,0,8);bx(g,.22,.3,.14,'#1565c0',0,.8,0);bx(g,.14,.1,.02,'#a5d6a7',0,.84,.08,{emissive:'#2e7d32'})},
+   wheat:g=>{
+     bx(g,.92,.06,.92,'#6d4c41',0,.03,0);
+     for(let x=-.3;x<=.31;x+=.2)for(let z=-.3;z<=.31;z+=.2){
+       cy(g,.03,.04,.45,'#eab308',x,.25,z,6);
+       sph(g,.045,'#facc15',x,.48,z);
+     }
+   },
+   veg:g=>{
+     bx(g,.92,.06,.92,'#5d4037',0,.03,0);
+     [-.25,0,.25].forEach(z=>{
+       bx(g,.8,.08,.16,'#4e342e',0,.07,z);
+       [-.28,-.09,.09,.28].forEach(x=>sph(g,.09,'#2e7d32',x,.15,z));
+     });
+   },
+   cattle:g=>{
+     bx(g,.94,.04,.94,'#7cb342',0,.02,0);
+     [[-.42,-.42],[.42,-.42],[-.42,.42],[.42,.42]].forEach(p=>cy(g,.03,.03,.35,'#6d4c41',p[0],.18,p[1],6));
+     bx(g,.88,.04,.04,'#8d6e63',0,.26,-.42);bx(g,.88,.04,.04,'#8d6e63',0,.26,.42);
+     bx(g,.4,.24,.22,'#fafafa',0,.22,0);bx(g,.16,.16,.16,'#fafafa',.24,.28,0);
+     bx(g,.12,.14,.12,'#333',-.05,.24,.06);
+   },
+   greenhouse:g=>{
+     bx(g,.9,.08,.9,'#cfd8dc',0,.04,0);
+     bx(g,.84,.5,.84,'#b3e5fc',0,.32,0,{transparent:true,opacity:.55,emissive:'#0288d1'});
+     add(g,new THREE.Mesh(new THREE.ConeGeometry(.62,.35,4),M('#81d4fa',{transparent:true,opacity:.65})),0,.74,0).rotation.y=Math.PI/4;
+     [-.2,.2].forEach(x=>bx(g,.24,.18,.6,'#2e7d32',x,.16,0));
+   },
+   silo:g=>{
+     cy(g,.34,.36,1.3,'#eceff1',0,.65,0,18);
+     sph(g,.34,'#d9480f',0,1.3,0);
+     bx(g,.2,.35,.2,'#546e7a',.34,.2,0);
+   },
+   mill:g=>{
+     bx(g,.86,.55,.65,'#8d6e63',0,.28,0);
+     cy(g,.22,.22,.5,'#d7ccc8',-.2,.65,0,14);
+     cy(g,.16,.16,.45,'#ffb74d',.22,.62,0,12);
+     bx(g,.5,.12,.3,'#fafafa',0,.58,.28);
+   },
+   meatproc:g=>{
+     bx(g,.9,.45,.6,'#b0bec5',0,.23,0);
+     bx(g,.84,.08,.36,'#37474f',0,.49,0);
+     bx(g,.35,.4,.4,'#eceff1',-.22,.68,0);
+     bx(g,.18,.12,.18,'#e57373',.22,.56,0);
+   },
+   fryline:g=>{
+     bx(g,.9,.42,.6,'#ffa726',0,.21,0);
+     bx(g,.76,.14,.42,'#ffe082',0,.48,0,{emissive:'#f57c00'});
+     bx(g,.28,.48,.46,'#546e7a',-.28,.66,0);
+   },
+   bottler:g=>{
+     bx(g,.88,.45,.58,'#1976d2',0,.23,0);
+     bx(g,.4,.52,.4,'#bbdefb',-.2,.68,0,{transparent:true,opacity:.75});
+     [-.05,.12,.28].forEach(x=>cy(g,.045,.045,.18,'#29b6f6',x,.54,.1,8));
+   },
+   logistics:g=>{
+     bx(g,.92,.36,.7,'#37474f',0,.18,0);
+     bx(g,.78,.48,.52,'#ff7043',0,.58,-.05);
+     bx(g,.6,.28,.06,'#263238',0,.48,.22);
+     bx(g,.3,.18,.24,'#ffd54f',0,.38,.28);
+   },
+   fishdock:g=>{
+     bx(g,.96,.14,.96,'#6d4c41',0,.07,0);
+     [[-.4,-.4],[.4,-.4],[-.4,.4],[.4,.4]].forEach(p=>cy(g,.05,.05,.45,'#3e2723',p[0],.22,p[1],8));
+     bx(g,.35,.28,.35,'#0288d1',-.2,.28,-.2);
+     bx(g,.3,.24,.3,'#ffb300',.22,.26,.18);
+   },
+   boat:g=>{
+     bx(g,.46,.22,.82,'#d84315',0,.14,0);
+     add(g,new THREE.Mesh(new THREE.ConeGeometry(.24,.32,4),M('#bf360c')),0,.16,-.52).rotation.x=-Math.PI/2;
+     bx(g,.34,.3,.32,'#fafafa',0,.38,.08);
+     bx(g,.28,.12,.04,'#81d4fa',0,.42,-.09,{emissive:'#0288d1'});
+     cy(g,.02,.02,.55,'#455a64',0,.65,.12,6);
+   },
+   smoker:g=>{
+     bx(g,.86,.55,.68,'#546e7a',0,.28,0);
+     bx(g,.74,.42,.56,'#b71c1c',0,.72,0);
+     cy(g,.08,.1,.55,'#263238',.22,1.15,-.15,10);
+     bx(g,.4,.26,.05,'#ff8a65',-.1,.72,.29,{emissive:'#d84315'});
+   },
+   fishmarket:g=>{
+     bx(g,.9,.35,.65,'#8d6e63',0,.18,0);
+     bx(g,.94,.08,.75,'#0288d1',0,.82,0);
+     [[-.4,-.3],[.4,-.3],[-.4,.3],[.4,.3]].forEach(p=>cy(g,.03,.03,.7,'#5d4037',p[0],.45,p[1],6));
+     [-.22,0,.22].forEach(x=>bx(g,.18,.08,.4,'#b3e5fc',x,.4,0));
+   },
+   roadseg:g=>{
+     bx(g,.98,.05,.98,'#37474f',0,.025,0);
+     bx(g,.5,.02,.07,'#ffd54f',0,.06,0);
+     bx(g,.98,.07,.16,'#b0bec5',0,.035,-.42);
+     bx(g,.98,.07,.16,'#b0bec5',0,.035,.42);
+   },
+   roundabout:g=>{
+     bx(g,.98,.05,.98,'#37474f',0,.025,0);
+     cy(g,.28,.3,.14,'#689f38',0,.09,0,18);
+     cy(g,.08,.1,.32,'#cfd8dc',0,.28,0,12);
+   },
+   busstop:g=>{
+     bx(g,.98,.05,.98,'#455a64',0,.025,0);
+     bx(g,.72,.06,.34,'#1565c0',0,.68,-.22);
+     [-.3,.3].forEach(x=>cy(g,.025,.025,.66,'#cfd8dc',x,.34,-.34,6));
+     bx(g,.54,.12,.14,'#ffca28',0,.16,-.22);
+   },
+   streetlamp:g=>{
+     bx(g,.98,.05,.98,'#455a64',0,.025,0);
+     cy(g,.03,.04,.85,'#263238',-.32,.44,-.32,8);
+     sph(g,.08,'#fff59d',-.32,.9,-.24);
+     cy(g,.03,.04,.85,'#263238',.32,.44,.32,8);
+     sph(g,.08,'#fff59d',.32,.9,.24);
+   },
+   house:(g,c)=>{
+     const fl=c?U(c,'fl'):0, gd=c?U(c,'gd'):0, ad=c?U(c,'ad'):0;
+     const h=0.85 + fl*0.42;
+     bx(g,.82,h,.76,gd?'#ffe082':'#f4a261',0,h/2,0);
+     add(g,new THREE.Mesh(new THREE.ConeGeometry(.62,.45,4),M('#8d4024')),0,h+.22,0).rotation.y=Math.PI/4;
+     for(let i=0;i<=fl;i++){
+       const wy=0.45+i*0.4;
+       bx(g,.22,.2,.04,'#bde0fe',-.2,wy,.39,{emissive:'#4a90b8'});
+       bx(g,.22,.2,.04,'#bde0fe',.2,wy,.39,{emissive:'#4a90b8'});
+     }
+     if(gd>0){bx(g,.22,.14,.22,'#43a047',-.35,.1,.45);bx(g,.22,.14,.22,'#e53935',.35,.1,.45)}
+     if(ad>0){bx(g,.46,.22,.06,'#d9480f',0,h+.48,0)}
+   },
+   tenement:(g,c)=>{
+     const fl=c?U(c,'fl'):0, bl=c?U(c,'bl'):0, ad=c?U(c,'ad'):0;
+     const h=1.45 + fl*0.55;
+     bx(g,.9,h,.86,bl?'#ffcc80':'#e5989b',0,h/2,0);
+     bx(g,.94,.12,.9,'#6d4c41',0,h+.06,0);
+     const rows=2+fl;
+     for(let r=0;r<rows;r++){
+       const wy=0.42+r*0.48;
+       [-.25,0,.25].forEach(wx=>{
+         bx(g,.16,.24,.04,'#bde0fe',wx,wy,.44,{emissive:'#4a90b8'});
+         if(bl>0)bx(g,.2,.06,.12,'#eceff1',wx,wy-.12,.48);
+       });
+     }
+     if(ad>0){bx(g,.7,.28,.08,'#d9480f',0,h+.26,0)}
+   },
+   hotel:(g,c)=>{
+     const fl=c?U(c,'fl'):0, sp=c?U(c,'sp'):0, ad=c?U(c,'ad'):0;
+     const h=1.6 + fl*0.5;
+     bx(g,.92,h,.88,'#90caf9',0,h/2,0);
+     bx(g,.96,.14,.92,'#1565c0',0,h+.07,0);
+     bx(g,.36,.32,.14,'#ffd54f',0,.18,.46);
+     for(let r=0;r<2+fl;r++){
+       const wy=0.58+r*0.44;
+       [-.26,.26].forEach(wx=>bx(g,.22,.22,.04,'#fff9c4',wx,wy,.45,{emissive:'#fbc02d'}));
+     }
+     if(sp>0)cy(g,.25,.25,.08,'#29b6f6',0,h+.16,0,14,{emissive:'#0288d1'});
+     if(ad>0)bx(g,.74,.26,.08,'#ff6f00',0,h+.3,0);
+   },
+   office:(g,c)=>{
+     const fl=c?U(c,'fl'):0, ct=c?U(c,'ct'):0, ad=c?U(c,'ad'):0;
+     const h=1.85 + fl*0.6;
+     bx(g,.88,h,.88,'#455a64',0,h/2,0);
+     for(let r=0;r<3+fl;r++){
+       const wy=0.42+r*0.45;
+       bx(g,.78,.24,.91,'#81d4fa',0,wy,0,{emissive:'#0288d1'});
+     }
+     if(ct>0)bx(g,.5,.2,.2,'#ffb300',0,.15,.48);
+     if(ad>0)bx(g,.65,.34,.06,'#00e676',0,h-.35,.46,{emissive:'#00a050'});
+   },
+   mall:(g,c)=>{
+     const fl=c?U(c,'fl'):0, pk=c?U(c,'pk'):0, ad=c?U(c,'ad'):0;
+     const h=1.2 + fl*0.45;
+     bx(g,.96,h,.92,'#ce93d8',0,h/2,0);
+     cy(g,.32,.32,.22,'#81d4fa',0,h+.1,0,16,{emissive:'#0288d1'});
+     bx(g,.55,.42,.06,'#e1bee7',0,.25,.47);
+     if(pk>0)bx(g,.4,.18,.18,'#1565c0',-.3,.12,.48);
+     if(ad>0)bx(g,.22,.7,.14,'#d9480f',.42,h+.35,.4);
+   },
+   assembly:g=>{bx(g,.96,.12,.92,'#455a64',0,.06,0);bx(g,.88,.9,.82,'#90a4ae',0,.58,0);bx(g,.65,.08,.7,'#263238',0,1.06,0);bx(g,.18,.45,.18,'#ef6c00',-.3,.32,.18);bx(g,.18,.45,.18,'#ef6c00',.3,.32,-.18)},
+   robot:g=>{bx(g,.35,.12,.35,'#37474f',0,.08,0);cy(g,.12,.12,.4,'#f9a825',0,.32,0);bx(g,.12,.32,.12,'#fbc02d',.15,.55,0);bx(g,.28,.1,.12,'#ef6c00',.28,.72,0)},
+   conveyor:g=>{bx(g,.94,.16,.36,'#37474f',0,.25,0);for(let x=-.35;x<=.35;x+=.18)cy(g,.09,.09,.32,'#90a4ae',x,.26,0,10)},
+   press:g=>{bx(g,.72,.12,.58,'#455a64',0,.08,0);bx(g,.12,.7,.12,'#78909c',-.28,.43,0);bx(g,.12,.7,.12,'#78909c',.28,.43,0);bx(g,.5,.12,.48,'#ef6c00',0,.72,0);bx(g,.3,.18,.3,'#b0bec5',0,.53,0)},
+   generator:g=>{bx(g,.65,.55,.55,'#546e7a',0,.28,0);cy(g,.18,.18,.12,'#ffca28',0,.62,0,12);bx(g,.18,.12,.08,'#69f0ae',0,.32,.3)},
+   skyscraper:(g,c)=>{const h=2.6+U(c,'fl')*1.1;bx(g,.8,.12,.8,'#546e7a',0,.06,0);bx(g,.6,h,.6,'#4fc3f7',0,h/2+.12,0,{emissive:'#0d3c5e'});for(let y=.5;y<h;y+=.35)bx(g,.64,.04,.64,'#eceff1',0,y,0);bx(g,.2,.45,.2,'#b0bec5',0,h+.35,0);cy(g,.02,.02,.6,'#ef5350',0,h+.85,0,6)},
+   colony:(g,c)=>{const f=U(c,'fl');[[-.22,-.22],[.22,-.22],[-.22,.22],[.22,.22]].forEach((q,i)=>{const h=.55+.18*(i%2)+f*.22;bx(g,.34,h,.34,['#ffcc80','#ef9a9a','#a5d6a7','#90caf9'][i],q[0],h/2,q[1]);bx(g,.36,.05,.36,'#8d6e63',q[0],h+.02,q[1])});if(U(c,'gd'))sph(g,.1,'#43a047',0,.1,0)},
+   exchange:g=>{bx(g,.92,.14,.92,'#cfd8dc',0,.07,0);bx(g,.76,.6,.66,'#eceff1',0,.44,0);for(let x=-.3;x<=.31;x+=.15)cy(g,.04,.04,.55,'#fff',x,.42,.38,8);bx(g,.92,.1,.8,'#b0bec5',0,.78,0);bx(g,.7,.14,.5,'#90a4ae',0,.9,0);bx(g,.5,.16,.04,'#1b5e20',0,.46,.34,{emissive:'#00e676'});const l=lab('📈','rgba(27,94,32,.9)');l.position.set(0,1.45,0);g.add(l)},
+   warehouse:g=>{bx(g,.94,.75,.9,'#8d6e63',0,.38,0);for(let x=-.3;x<=.3;x+=.3)for(let y=.2;y<.8;y+=.25)bx(g,.18,.18,.3,'#ffca28',x,y,.12)}
+  };
+
+  const meshes={}, nMeshes={}, pMeshes={}, cMeshes={};
+  function syncCell(x,y){
+    if(y===1)buildN();
+    const k=x+','+y;if(meshes[k]){itemRoot.remove(meshes[k]);delete meshes[k]}
+    const c=grid[y][x];if(!c)return;
+    const g=new THREE.Group();MODEL[c.t](g,c);
+    const s=Object.values(c.u).reduce((a,b)=>a+b,0);
+    if(s>0){cy(g,.46,.46,.02,'#ffd54f',0,.01,0,24,{transparent:true,opacity:Math.min(.85,.25+s*.1)});const l=lab('★'+s,'rgba(160,110,0,.9)');l.position.set(0,1.3,0);g.add(l)}
+    g.position.set(x+.5,0,y+.5);g.rotation.y=c.rot||0;g.userData.xy=[x,y];itemRoot.add(g);meshes[k]=g;
+  }
+  function syncNCell(nx,nz){
+    const k=nx+','+nz;
+    if(nMeshes[k]){nItemRoot.remove(nMeshes[k]);delete nMeshes[k]}
+    const c=ngrid[k];if(!c)return;
+    const g=new THREE.Group();if(MODEL[c.t])MODEL[c.t](g,c);
+    g.position.set(nx+.5,0,nz+.5);g.rotation.y=c.rot||0;
+    nItemRoot.add(g);nMeshes[k]=g;
+  }
+  function syncPCell(px,pz){
+    const k=px+','+pz;
+    if(pMeshes[k]){pItemRoot.remove(pMeshes[k]);delete pMeshes[k]}
+    const c=pgrid[k];if(!c)return;
+    const g=new THREE.Group();if(MODEL[c.t])MODEL[c.t](g,c);
+    g.position.set(px+.5,.06,pz+.5);g.rotation.y=c.rot||0;
+    g.userData.btype=c.t;pItemRoot.add(g);pMeshes[k]=g;
+  }
+  function syncCCell(cx,cz){
+    const k=cx+','+cz;
+    if(cMeshes[k]){cItemRoot.remove(cMeshes[k]);delete cMeshes[k]}
+    const c=cgrid[k];if(!c)return;
+    const g=new THREE.Group();if(MODEL[c.t])MODEL[c.t](g,c);
+    g.position.set(cx+.5,0,cz+.5);g.rotation.y=c.rot||0;
+    cItemRoot.add(g);cMeshes[k]=g;
+  }
+  function orient(x,y,t){
+    if(t==='drive')return Math.PI;
+    let d;
+    if(isWc(x,y))d=[[y-ZB.WT,0],[ZB.WW-1-x,-Math.PI/2],[x,Math.PI/2]];
+    else if(isVip(x,y))d=[[y-2,0],[x-ZB.VX,Math.PI/2],[W-1-x,-Math.PI/2]];
+    else if(isKit(x,y))d=[[y-2,0],[x,Math.PI/2],[ZB.KW-1-x,-Math.PI/2],[ZB.KH-1-y,Math.PI]];
+    else return 0;
+    return d.sort((a,b)=>a[0]-b[0])[0][1];
+  }
+  const blocked=(x,y)=>(DOORS.includes(x)&&y>=H-1)||(y===H-2&&(x===ZB.WW-1||x===ZB.WW))||(y===VY&&(x===ZB.VX-1||x===ZB.VX))||(x===KX&&y===1);
+  const QS=['w1','q','ck','rd'];
+  let selectedBuild=null, selectedZone='b';
+
+  /* ---------- KAMERA ORBIT + PAN + ZOOM ---------- */
+  const camCtrl={
+    x:W/2, z:9, tx:W/2, tz:9,
+    yaw:0.35, tyaw:0.35,
+    pitch:0.92, tpitch:0.92,
+    dist:32, tdist:32
+  };
+  const keysDown={};
+  window.addEventListener('keydown',e=>{
+    if(e.target&&(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA'))return;
+    const k=e.key.toLowerCase();
+    keysDown[k]=true;
+    if(k==='r')resetCam();
+    if(e.key==='='||e.key==='+')camCtrl.tdist=clamp(camCtrl.tdist-3,6,95);
+    if(e.key==='-'||e.key==='_')camCtrl.tdist=clamp(camCtrl.tdist+3,6,95);
+  });
+  window.addEventListener('keyup',e=>{keysDown[e.key.toLowerCase()]=false});
+
+  function resetCam(){
+    camCtrl.tx=W/2;camCtrl.tz=9;
+    camCtrl.tyaw=0.35;camCtrl.tpitch=0.92;camCtrl.tdist=32;
+  }
+  function camTick(dt){
+    const spd=(camCtrl.dist*0.95)*(dt/1000);
+    const fwdX=-Math.sin(camCtrl.yaw), fwdZ=-Math.cos(camCtrl.yaw);
+    const rgtX=Math.cos(camCtrl.yaw), rgtZ=-Math.sin(camCtrl.yaw);
+    if(keysDown['w']||keysDown['arrowup']){camCtrl.tx+=fwdX*spd;camCtrl.tz+=fwdZ*spd}
+    if(keysDown['s']||keysDown['arrowdown']){camCtrl.tx-=fwdX*spd;camCtrl.tz-=fwdZ*spd}
+    if(keysDown['a']||keysDown['arrowleft']){camCtrl.tx-=rgtX*spd;camCtrl.tz-=rgtZ*spd}
+    if(keysDown['d']||keysDown['arrowright']){camCtrl.tx+=rgtX*spd;camCtrl.tz+=rgtZ*spd}
+    if(keysDown['q'])camCtrl.tyaw-=1.6*(dt/1000);
+    if(keysDown['e'])camCtrl.tyaw+=1.6*(dt/1000);
+
+    camCtrl.tx=clamp(camCtrl.tx,-40,125);
+    camCtrl.tz=clamp(camCtrl.tz,-45,50);
+    camCtrl.tpitch=clamp(camCtrl.tpitch,0.18,1.42);
+    camCtrl.tdist=clamp(camCtrl.tdist,6,95);
+
+    const sm=1-Math.pow(0.001,dt/1000);
+    camCtrl.x+=(camCtrl.tx-camCtrl.x)*sm;
+    camCtrl.z+=(camCtrl.tz-camCtrl.z)*sm;
+    camCtrl.yaw+=(camCtrl.tyaw-camCtrl.yaw)*sm;
+    camCtrl.pitch+=(camCtrl.tpitch-camCtrl.pitch)*sm;
+    camCtrl.dist+=(camCtrl.tdist-camCtrl.dist)*sm;
+    tz=camCtrl.tz;
+  }
+  function cam(){
+    const hd=camCtrl.dist*Math.cos(camCtrl.pitch);
+    const vy=camCtrl.dist*Math.sin(camCtrl.pitch);
+    camera.position.set(
+      camCtrl.x+Math.sin(camCtrl.yaw)*hd,
+      vy,
+      camCtrl.z+Math.cos(camCtrl.yaw)*hd
+    );
+    camera.lookAt(camCtrl.x,0,camCtrl.z);
+  }
+  function panCameraByPixels(dx,dy){
+    const scale=camCtrl.dist*0.0022;
+    const rgtX=Math.cos(camCtrl.yaw), rgtZ=-Math.sin(camCtrl.yaw);
+    const fwdX=-Math.sin(camCtrl.yaw), fwdZ=-Math.cos(camCtrl.yaw);
+    camCtrl.tx=clamp(camCtrl.tx-rgtX*dx*scale+fwdX*dy*scale,-40,125);
+    camCtrl.tz=clamp(camCtrl.tz-rgtZ*dx*scale+fwdZ*dy*scale,-45,50);
+  }
+
+  function resizeGame(){
+    const r=wrap.getBoundingClientRect();
+    renderer.setSize(Math.max(1,r.width),Math.max(1,r.height),false);
+    camera.aspect=Math.max(1,r.width)/Math.max(1,r.height);
+    camera.updateProjectionMatrix();
+  }
+  window.addEventListener('resize',resizeGame);resizeGame();
+
+  function carMesh(){
+    const g=new THREE.Group();
+    bx(g,1.25,.38,.68,'#e63946',0,.35,0);
+    bx(g,.62,.28,.62,'#90caf9',-.08,.64,0);
+    for(const x of [-.38,.38])for(const z of [-.29,.29])cy(g,.14,.14,.08,'#222',x,.16,z,12);
+    return g;
+  }
+  function chefMesh(){
+    const g=new THREE.Group();cy(g,.16,.18,.38,'#fff',0,.35,0,12);
+    sph(g,.14,'#f1c27d',0,.66,0);cy(g,.16,.16,.12,'#fff',0,.82,0,12);return g;
+  }
+  function custMesh(vip){
+    const g=new THREE.Group();cy(g,.16,.18,.4,vip?'#7b2cbf':'#1565c0',0,.3,0,12);
+    sph(g,.14,'#f1c27d',0,.62,0);return g;
+  }
+  function go(a,x,y,dt){
+    const dx=x-a.x,dy=y-a.y,d=Math.hypot(dx,dy),step=(a.spd||3.1)*dt/1000;
+    if(d<=step||d<.04){a.x=x;a.y=y;return true}
+    a.x+=dx/d*step;a.y+=dy/d*step;return false;
+  }
+  function walk(a,x,y,dt){return go(a,x,y,dt)}
+  function pop(x,y,msg,bg,scale){
+    const el=lab(String(msg),bg||'rgba(0,0,0,.72)');
+    el.position.set(x,1.5,y);el.scale.multiplyScalar(scale||.8);scene.add(el);
+    fl.push({s:el,life:1300});
+  }
+  function order(){
+    const available=D.filter(d=>d.own||D.some(x=>x.n===d.n&&x.own));
+    let pool=available.length?available:D;
+    /* klient zmienia danie, gdy czegoś brakuje */
+    if(fishStock<1){const alt=pool.filter(d=>!d.fish);if(alt.length&&Math.random()<.75)pool=alt}
+    else if(stock<1){const alt=pool.filter(d=>d.fish);if(alt.length&&Math.random()<.75)pool=alt}
+    const d=pk(pool);
+    return {em:d.e,n:d.n,s:d.p,fish:!!d.fish};
+  }
+  function factoryWorkersNeeded(){
+    return nCells('assembly').length*8+nCells('mill').length*3+nCells('meatproc').length*4+
+      nCells('fryline').length*4+nCells('bottler').length*3+nCells('robot').length*1;
+  }
+  function refreshIndustry(){
+    const available=Math.max(0,cityPopulation()-25);
+    industrialEmployees=Math.min(available,factoryWorkersNeeded());
+    return industrialEmployees;
+  }
+  const baseFactoryRate=factoryRate;
+  const effectiveFactoryRate=function(){
+    const base=baseFactoryRate();
+    const machineBonus=nCnt('robot')*.25+nCnt('conveyor')*.18+nCnt('press')*.22;
+    const staffing=factoryWorkersNeeded()?Math.min(1,refreshIndustry()/factoryWorkersNeeded()):1;
+    return (base+nCnt('assembly')*2.8+nCnt('press')*1.1)*(1+machineBonus)*(.35+.65*staffing);
+  };
+
+  /* ================= ZAOPATRZENIE: produkcja, magazyny, zamówienia, braki ================= */
+  const OD_LIMIT=600,OD_RATE=.02,OD_EVERY=10000;let odT=0,odPaid=0;
+  const canPay=c=>money-c>=-OD_LIMIT;
+  const SUP={auto:true,emerg:true,lvl:0,minPct:.25,fillPct:.7,orders:[],log:[],use:[],clock:0,aR:0,aF:0,aY:0,aFi:0,sR:0,sFi:0,aT:0,exT:0,warnT:0,spent:0,bought:0,emg:0,lost:0,spoiled:0,sold:0,fst:'none'};
+  const SUP_TH=[.15,.25,.4],SUP_FILL=[.5,.7,.9];
+  const SUP_BASE={stock:5,fish:7,raw:2.5};
+  const SUP_LV=[
+    {n:'Zakupy z rynku',d:'+35% ceny · dostawa ~26 s',c:0,m:1.35,t:26000},
+    {n:'Umowa z hurtownikiem',d:'cena bazowa · dostawa ~18 s',c:400,m:1,t:18000},
+    {n:'Kontrakt strategiczny',d:'−20% ceny · dostawa ~11 s',c:1200,m:.8,t:11000}];
+  const KD={
+    stock:{e:'📦',n:'składniki',cap:()=>maxStock(),get:()=>stock,add:n=>{stock=Math.min(maxStock(),stock+n)},col:'#e76f51'},
+    fish:{e:'🐟',n:'ryby',cap:()=>maxFish(),get:()=>fishStock,add:n=>{fishStock=Math.min(maxFish(),fishStock+n)},col:'#0288d1'},
+    raw:{e:'🌾',n:'surowiec',cap:()=>maxRaw(),get:()=>raw,add:n=>{raw=Math.min(maxRaw(),raw+n)},col:'#8d6e63'}};
+  const FACT_PROC=['mill','meatproc','fryline','bottler','assembly','press'];
+  const supPend=k=>SUP.orders.reduce((a,o)=>o.k===k?a+o.n:a,0);
+  const supFree=k=>Math.floor(KD[k].cap()-KD[k].get()-supPend(k));
+  const supMult=()=>SUP_LV[SUP.lvl].m*(1-.3*independencePct()/100);
+  const supUnit=k=>SUP_BASE[k]*supMult();
+  const supCost=(k,n)=>Math.max(1,Math.round(supUnit(k)*n*(n>=50?.9:n>=25?.95:1)));
+  const supMs=()=>SUP_LV[SUP.lvl].t*(1-Math.min(.5,nSum('logistics',c=>.12+.1*U(c,'cv'))));
+  const supEndX=()=>Math.max(3,W/2);
+  function logS(m){SUP.log.unshift(m);if(SUP.log.length>5)SUP.log.length=5}
+  function mkTruck(col){
+    const g=new THREE.Group();
+    bx(g,.9,.5,.5,col,-.15,.45,0);bx(g,.35,.38,.46,'#eceff1',.55,.38,0);bx(g,.1,.16,.4,'#90caf9',.74,.5,0);
+    [-.4,.3,.6].forEach(x=>[-.27,.27].forEach(z=>bx(g,.2,.2,.08,'#222',x,.1,z)));
+    g.position.set(-34,0,.45);scene.add(g);return g;
+  }
+  function placeOrder(k,n,auto){
+    const d=KD[k];n=Math.min(n,supFree(k));
+    if(n<1||SUP.orders.length>=8)return false;
+    const cost=supCost(k,n);if(!canPay(cost))return false;
+    const wasOk=money>=cost;money-=cost;SUP.spent+=cost;
+    if(!wasOk)logS('🏦 Debet: −'+Math.round(-money)+' zł (limit '+OD_LIMIT+' zł)');
+    const tot=supMs();SUP.orders.push({k,n,t:tot,tot,m:mkTruck(d.col)});
+    logS((auto?'🤖 Auto: ':'📝 Zamówiono: ')+d.e+' +'+n+' za '+cost+' zł · dostawa ~'+Math.round(tot/1000)+' s');
+    return true;
+  }
+  /* pobranie składnika na jedno danie; brak -> zakup awaryjny albo utracona sprzedaż */
+  function takeSupply(o){
+    const k=o&&o.fish?'fish':'stock',d=KD[k];
+    if(d.get()>=1){if(k==='fish')fishStock--;else stock--;SUP.use.push(SUP.clock);return true}
+    if(SUP.emerg){
+      const n=3,cost=Math.round(supUnit(k)*1.8*n);
+      if(canPay(cost)){money-=cost;SUP.spent+=cost;SUP.emg++;d.add(n-1);SUP.use.push(SUP.clock);
+        logS('🚨 Pilny zakup: '+d.e+' ×'+n+' za '+cost+' zł');pop(supEndX(),.5,'🚨 pilny zakup −'+cost+' zł','rgba(200,120,0,.95)',1.1);return true}
+    }
+    SUP.lost++;mood+=.03;logS('❌ Brak '+d.n+' – utracona sprzedaż ('+(o?o.n:'danie')+')');
+    return false;
+  }
+  function supAuto(){
+    if(!SUP.auto)return;
+    const kinds=['stock'];
+    if(D.some(d=>d.fish&&d.own))kinds.push('fish');
+    if(FACT_PROC.some(t=>nCnt(t)>0))kinds.push('raw');
+    for(const k of kinds){
+      const d=KD[k],cap=d.cap(),lvl=d.get(),pend=supPend(k);
+      if(SUP.orders.some(o=>o.k===k))continue;
+      if(lvl+pend>=SUP.minPct*cap)continue;
+      let n=Math.floor(SUP.fillPct*cap-lvl-pend);n=Math.min(n,supFree(k));
+      const aff=Math.floor((money+OD_LIMIT)/supUnit(k));n=Math.min(n,aff);
+      if(n>=5)placeOrder(k,n,true);
+      else if(SUP.clock-SUP.warnT>20000){SUP.warnT=SUP.clock;logS('⚠ Brak środków na zamówienie: '+d.e+' '+d.n)}
+    }
+  }
+  function supExport(){
+    const ex=nSum('logistics',c=>U(c,'ex'));if(!ex)return;
+    if(stock>maxStock()*.8){const n=Math.floor(stock-maxStock()*.7),g=n*4;
+      if(n>0){stock-=n;money+=g;SUP.sold+=g;logS('💰 Eksport nadwyżek: −'+n+' 📦 → +'+g+' zł');pop(supEndX(),.5,'💰 eksport +'+g+' zł','rgba(30,120,60,.95)',1.1)}}
+  }
+  /* cykl produkcyjny (co 4 s): pola -> surowiec -> fabryki -> składniki; połowy -> ryby; psucie */
+  function supplyCycle(){
+    const eff=effectiveFactoryRate();
+    SUP.aR+=farmRate();let w=Math.floor(SUP.aR);SUP.aR-=w;
+    raw=Math.min(maxRaw(),raw+w);
+    {const over=raw-maxRaw()*.6;if(over>0){SUP.sR+=over*.05/(1+nCnt('silo')*.6);const l=Math.floor(SUP.sR);SUP.sR-=l;const x=Math.min(raw,l);raw-=x;SUP.spoiled+=x}}
+    if(eff<=0)SUP.fst='none';
+    else{
+      SUP.aF=Math.min(SUP.aF+eff,eff*2+1);
+      const room=Math.max(0,maxStock()-stock);
+      const can=Math.min(Math.floor(SUP.aF),raw,room);
+      if(can>0){raw-=can;SUP.aF-=can;SUP.aY+=can*1.2;const y=Math.floor(SUP.aY);SUP.aY-=y;stock=Math.min(maxStock(),stock+y);SUP.fst='ok'}
+      else SUP.fst=raw<1?'noraw':room<1?'full':'ok';
+    }
+    SUP.aFi+=fishCatchRate();w=Math.floor(SUP.aFi);SUP.aFi-=w;
+    fishStock=Math.min(maxFish(),fishStock+w);
+    {const fr=Math.max(.01,.07-.025*Math.min(2,pCnt('smoker'))-.02*pSum('fishdock',c=>U(c,'ic')));
+     SUP.sFi+=fishStock*fr;const l=Math.floor(SUP.sFi);SUP.sFi-=l;const x=Math.min(fishStock,l);fishStock-=x;SUP.spoiled+=x}
+    if(pCnt('smoker')&&fishStock>maxFish()*.5){
+      const c=Math.min(Math.floor(fishProcessRate()*.6),Math.floor(fishStock-maxFish()*.5));
+      if(c>0&&stock<maxStock()){fishStock-=c;stock=Math.min(maxStock(),stock+Math.floor(c*1.5))}
+    }
+  }
+  function supplyTick(dt){
+    SUP.clock+=dt;prodT+=dt;
+    if(money<0){odT+=dt;if(odT>=OD_EVERY){odT=0;const i=Math.max(1,Math.ceil(-money*OD_RATE));money-=i;odPaid+=i;logS('🏦 Odsetki od debetu: −'+i+' zł');pop(supEndX(),.5,'🏦 odsetki −'+i+' zł','rgba(180,40,40,.95)',1.1)}}else odT=0;
+    if(prodT>=4000){prodT=0;supplyCycle()}
+    while(SUP.use.length&&SUP.clock-SUP.use[0]>60000)SUP.use.shift();
+    const xe=supEndX();
+    for(const o of SUP.orders){o.t-=dt;const pr=1-Math.max(0,o.t)/o.tot;if(o.m)o.m.position.x=-34+(xe+34)*Math.min(1,pr/.85)}
+    if(SUP.orders.some(o=>o.t<=0)){
+      const done=SUP.orders.filter(o=>o.t<=0);SUP.orders=SUP.orders.filter(o=>o.t>0);
+      done.forEach(o=>{const d=KD[o.k],b=d.get();d.add(o.n);const got=d.get()-b;SUP.bought+=got;if(o.m)scene.remove(o.m);
+        logS('✅ Dostawa: '+d.e+' +'+got+(got<o.n?' (reszta nie zmieściła się)':''));pop(xe,.5,'🚚 '+d.e+' +'+got,'rgba(30,120,60,.9)',1.1)});
+      ui();
+    }
+    SUP.aT+=dt;if(SUP.aT>=1000){SUP.aT=0;supAuto()}
+    SUP.exT+=dt;if(SUP.exT>=8000){SUP.exT=0;supExport()}
+  }
+  /* panel zaopatrzenia (aktualizowany w miejscu, bez migania) */
+  const SUPB={};
+  function supplyRender(){
+    const p=$('pan');psig='';
+    if(!$('supRoot')){
+      p.innerHTML='<div class="hd"><span>📦 Zaopatrzenie i dostawy</span><button id="closePan">Zamknij</button></div><div id="supRoot"><div id="supInfo" style="font-size:12px;line-height:1.45;white-space:pre-line;margin-bottom:6px"></div><div class="bs" id="supBtns"></div></div>';
+      $('closePan').onclick=()=>{p.style.display='none';panel=null;psig=''};
+      const host=$('supBtns'),mk=(id,f)=>{const b=document.createElement('button');b.onclick=()=>{f();ui()};host.appendChild(b);SUPB[id]=b};
+      mk('auto',()=>{SUP.auto=!SUP.auto});
+      mk('thr',()=>{SUP.minPct=SUP_TH[(SUP_TH.indexOf(SUP.minPct)+1)%SUP_TH.length]});
+      mk('fill',()=>{SUP.fillPct=SUP_FILL[(SUP_FILL.indexOf(SUP.fillPct)+1)%SUP_FILL.length]});
+      mk('emg',()=>{SUP.emerg=!SUP.emerg});
+      mk('lv',()=>{const nx=SUP_LV[SUP.lvl+1];if(nx&&money>=nx.c){money-=nx.c;SUP.lvl++;logS('🤝 Nowa umowa: '+nx.n)}});
+      SUPB.man=[['stock',10],['stock',25],['stock',50],['fish',10],['fish',20],['raw',20],['raw',40]].map((a,i)=>{mk('m'+i,()=>{const n=Math.min(a[1],supFree(a[0]));if(n>0)placeOrder(a[0],n,false)});return a});
+    }
+    p.style.display='block';
+    const st=(b,t,dis)=>{if(b.textContent!==t)b.textContent=t;b.disabled=!!dis};
+    st(SUPB.auto,'🤖 Auto-zamawianie: '+(SUP.auto?'WŁ.':'WYŁ.'));
+    st(SUPB.thr,'📉 Zamawiaj, gdy poniżej '+Math.round(SUP.minPct*100)+'% magazynu');
+    st(SUPB.fill,'📈 Uzupełniaj do '+Math.round(SUP.fillPct*100)+'%');
+    st(SUPB.emg,'🚨 Pilny zakup przy braku: '+(SUP.emerg?'TAK':'NIE')+' (×1.8 ceny, 3 szt.)');
+    const nx=SUP_LV[SUP.lvl+1];
+    st(SUPB.lv,nx?'⬆ '+nx.n+' ('+nx.d+') · '+nx.c+' zł':'✓ Najlepszy kontrakt dostaw',!nx||money<nx.c);
+    SUPB.man.forEach((a,i)=>{const k=a[0],n=Math.min(a[1],supFree(k)),c=n>0?supCost(k,n):0;
+      st(SUPB['m'+i],'🛒 '+KD[k].e+' +'+(n>0?n:a[1])+(n>0?' · '+c+' zł':' · brak miejsca'),n<1||!canPay(c)||SUP.orders.length>=8)});
+    const rate=SUP.use.length,mins=stock>0&&rate>0?(stock/rate).toFixed(1)+' min':'–';
+    const eff=effectiveFactoryRate(),fs={ok:'pracują',noraw:'⚠ brak surowca',full:'magazyn pełny',none:'brak fabryk'}[SUP.fst];
+    const L=[
+      '📦 Składniki '+stock+'/'+maxStock()+' · zużycie ~'+rate+'/min · starczy na '+mins,
+      '🌾 Surowiec '+raw+'/'+maxRaw()+' · pola +'+farmRate().toFixed(1)+' / 4 s',
+      '🐟 Ryby '+fishStock+'/'+maxFish()+' · połowy +'+fishCatchRate().toFixed(1)+' / 4 s',
+      '⚙️ Fabryki '+eff.toFixed(1)+' / 4 s · '+fs+' · ceny dostaw ×'+supMult().toFixed(2)+' ('+SUP_LV[SUP.lvl].n+')',
+      '🚚 W drodze: '+(SUP.orders.length?SUP.orders.map(o=>KD[o.k].e+'+'+o.n+' ~'+Math.max(1,Math.ceil(o.t/1000))+'s').join(' · '):'nic'),
+      '📊 Wydano '+SUP.spent+' zł · dostarczono '+SUP.bought+' · awaryjne '+SUP.emg+' · utracone sprzedaże '+SUP.lost+' · zepsute '+SUP.spoiled+(SUP.sold?' · eksport +'+SUP.sold+' zł':'')];
+    SUP.log.forEach(m=>L.push('• '+m));
+    const t=L.join('\n'),inf=$('supInfo');if(inf.textContent!==t)inf.textContent=t;
+  }
+
+  function ui(){
+    $('money').textContent=Math.floor(money);{const m=$('money').parentNode;m.style.background=money<0?'#fecaca':'';m.style.color=money<0?'#991b1b':'';m.title=money<0?'Debet! Limit −'+OD_LIMIT+' zł, odsetki '+Math.round(OD_RATE*100)+'% co '+OD_EVERY/1000+' s':''}$('rate').textContent=rating().toFixed(1);
+    $('stock').textContent=stock;$('maxst').textContent=maxStock();
+    $('raw').textContent=raw;$('fish').textContent=fishStock;
+    $('pend').textContent=SUP.orders.length;$('autoS').textContent=SUP.auto?'AUTO':'RĘCZNIE';
+    {const sp=$('stock').parentNode;sp.style.background=stock<1?'#fecaca':stock<maxStock()*SUP.minPct?'#fde68a':''}
+    $('indep').textContent=independencePct();$('pop').textContent=cityPopulation();
+    $('served').textContent=served;$('cars').textContent=cars.length+pcs.length;
+    $('nc').textContent=staff.filter(s=>s.t==='c').length;
+    $('nw').textContent=staff.filter(s=>s.t==='w').length;
+    $('qn').textContent=cust.filter(c=>QS.includes(c.st)).length;
+    $('rv').textContent=revs.length?revs[0].s.toFixed(1)+'★':'—';
+    refreshIndustry();
+    if(panel&&panel.k!=='build'&&$('pan').style.display==='block')renderPanel();
+    let el=$('industryWorkers');
+    if(!el){
+      el=document.createElement('span');el.id='industryWorkers';el.className='pill';
+      $('w').querySelector('.hud').appendChild(el);
+    }
+    el.textContent='👷 '+industrialEmployees+'/'+factoryWorkersNeeded();
+  }
+  function setMark(){
+    if(!selectedBuild)mark.visible=false;
+  }
+  const ZH={k:[['KW','➡ Poszerz kuchnię w prawo','⬅ Zwęź kuchnię',1],['KH','⬇ Wydłuż kuchnię w dół','⬆ Skróć kuchnię',1]],w:[['WW','➡ Poszerz WC w prawo','⬅ Zwęź WC',1],['WT','⬆ Rozszerz WC w górę','⬇ Zwęź WC',-1]],v:[['VX','⬅ Poszerz VIP w lewo','➡ Zwęź VIP',-1]]};
+const zlim=k=>({KW:[4,8],KH:[6,ZB.WT],WW:[4,8],WT:[ZB.KH,10],VX:[11,16]})[k];
+function zoneDiff(key,v){const o=ZB[key],a=[],b={};for(let y=2;y<H;y++)for(let x=0;x<W;x++)b[x+','+y]=zoneOf(x,y);ZB[key]=v;for(let y=2;y<H;y++)for(let x=0;x<W;x++)if(zoneOf(x,y)!==b[x+','+y])a.push([x,y]);ZB[key]=o;return a}
+function zonePanel(z){const b=[];
+ ZH[z].forEach(h=>{const key=h[0],lim=zlim(key);
+  [[ZB[key]+h[3],h[1],1],[ZB[key]-h[3],h[2],0]].forEach(o=>{const v=o[0],ok=v>=lim[0]&&v<=lim[1],a=ok?zoneDiff(key,v):[],em=a.every(c=>!grid[c[1]][c[0]]),cost=a.length*(o[2]?30:-15);
+   b.push({l:o[1]+(ok?' · '+(o[2]?cost+' zł':'zwrot +'+(-cost)+' zł')+(em?'':' · najpierw przenieś obiekty'):' · limit'),dis:!ok||!em||(o[2]&&money<cost),f:()=>{money-=cost;ZB[key]=v;applyZones()}})})});
+ return{t:{k:'🍳 Kuchnia',w:'🚻 WC',v:'👑 VIP'}[z]+' – przesuń ścianę (płacisz za teren)',b}}
+  function plEmpty(p){for(let y=p.y;y<p.y+p.h;y++)for(let x=p.x;x<p.x+p.w;x++)if(grid[y][x])return 0;return 1}
+function buyPl(p,st,cost){money-=cost;p.st=st;plotVis(p);}
+function plotBuy(p){return{t:'🏞️ Działka na sprzedaż ('+p.w+'×'+p.h+' pól)',b:[
+ {l:'🌳 Kup jako teren – '+p.c+' zł',dis:money<p.c,f:()=>buyPl(p,1,p.c)},
+ {l:'🅿️ Kup jako parking – '+(p.c+250)+' zł',dis:money<p.c+250,f:()=>buyPl(p,2,p.c+250)}]}}
+function plotMgmt(p){const cost=p.st===2?100:250,em=plEmpty(p),n=em?'':' · najpierw sprzedaj obiekty';return[
+ {l:(p.st===2?'🌳 Zmień na teren – 100 zł':'🅿️ Zmień na parking – 250 zł')+n,dis:!em||money<cost,f:()=>{money-=cost;p.st=p.st===2?1:2;plotVis(p);panel=null;setMark()}},
+ {l:'💰 Sprzedaj działkę +'+Math.floor(p.c/2)+' zł'+n,dis:!em,f:()=>{money+=Math.floor(p.c/2);p.st=0;plotVis(p);panel=null;setMark()}}]}
+function hire(t){staff.push({t,x:t==='c'?1.5:4.7,y:t==='c'?3.8:5.5,job:null,tm:0,it:0,ph:0,hx:4.4+Math.random()*1.4,hy:5+Math.random()*3})}
+function staffPanel(){const nc=staff.filter(s=>s.t==='c').length,nw=staff.length-nc,cc=150*nc,cw=100*nw,ct=200*(train+1),q=cust.filter(c=>QS.includes(c.st)).length;
+ return{t:'👥 Personel – czeka '+q+' klientów',b:[
+ {l:'👨‍🍳 Zatrudnij kucharza ('+nc+'/6) · '+cc+' zł',dis:nc>=6||money<cc,f:()=>{money-=cc;hire('c')}},
+ {l:'🤵 Zatrudnij kelnera ('+nw+'/10) · '+cw+' zł',dis:nw>=10||money<cw,f:()=>{money-=cw;hire('w')}},
+ {l:'🎓 Szkolenie '+train+'/3 · +20% tempa · '+ct+' zł',dis:train>=3||money<ct,f:()=>{money-=ct;train++}}]}}
+  function bldPanel(){const c=25*(H-1);let em=1;for(let y=1;y<BASE;y++)if(grid[y][W-1])em=0;
+    return{t:'🏗️ Rozbudowa lokalu – szerokość '+W+'/'+MW,b:[
+      {l:'➡ Poszerz lokal o 1 pole · '+c+' zł',dis:W>=MW||money<c,f:()=>{money-=c;W++;growB()}},
+      {l:'⬅ Zwęź lokal o 1 pole · zwrot +'+Math.floor(c/2)+' zł'+(em?'':' · najpierw przenieś obiekty'),dis:W<=20||!em,f:()=>{money+=Math.floor(c/2);W--;growB()}}]}}
+  function cellAt(x,z){
+    if(z>=1&&z<GR&&x>=0&&x<MW&&grid[z][x])return{g:'m',c:grid[z][x]};
+    const k=x+','+z;
+    if(ngrid[k])return{g:'n',c:ngrid[k]};if(pgrid[k])return{g:'p',c:pgrid[k]};if(cgrid[k])return{g:'c',c:cgrid[k]};return null}
+  const SY={m:(x,z)=>syncCell(x,z),n:syncNCell,p:syncPCell,c:syncCCell};
+  function setC(g,x,z,v){if(g==='m')grid[z][x]=v;else{const o={n:ngrid,p:pgrid,c:cgrid}[g],k=x+','+z;if(v)o[k]=v;else delete o[k]}SY[g](x,z)}
+  function tryMove(x,z){const mv=moving,ci=cellAt(mv.x,mv.z);if(!ci)return 0;
+    const old=selectedBuild;selectedBuild=ci.c.t;const ok=canBuildAt(x,z)&&!(x===mv.x&&z===mv.z);selectedBuild=old;
+    if(!ok){pop(x+.5,z+.5,'✋ tu nie można','rgba(180,40,40,.9)',1.2);return 0}
+    setC(mv.g,mv.x,mv.z,null);if(mv.g==='m')ci.c.rot=orient(x,z,ci.c.t);setC(mv.g,x,z,ci.c);return 1}
+  function itemPanel(r){const x=r.x,z=r.z,ci=cellAt(x,z);if(!ci)return null;const g=ci.g,it=ci.c,t=it.t,tk=taken[x+','+z];
+    const b=(UP[t]||[]).map(o=>{const l=U(it,o.k),cost=o.c*(l+1);return{l:o.e+' '+o.n+' '+l+'/3 · '+o.d+(l<3?' · '+cost+' zł':' · MAX'),dis:l>=3||money<cost,f:()=>{money-=cost;it.u=it.u||{};it.u[o.k]=l+1;SY[g](x,z)}}});
+    b.push({l:'✋ Przenieś (za darmo)',dis:!!tk,f:()=>{moving={g,x,z};panel={k:'moving'}}});
+    b.push({l:'🗑️ Sprzedaj +'+B[t].c/2+' zł',dis:!!tk,f:()=>{money+=B[t].c/2;setC(g,x,z,null);panel=null;$('pan').style.display='none';mark.visible=false}});
+    return{t:B[t].e+' '+B[t].n+(UP[t]?' – ulepszenia':''),b}}
+  function pdef(){
+    if(!panel||panel.k==='build')return null;
+    if(moving)return{t:'✋ Przenoszenie (bez opłat) – kliknij wolne pole w odpowiedniej strefie',b:[{l:'✖ Anuluj',f:()=>{moving=null;panel=null;$('pan').style.display='none'}}]};
+    if(panel.k==='menu')return{t:'📋 Menu – odblokowuj dania',b:D.map(d=>({l:d.e+' '+d.n+' '+d.p+' zł'+(d.own?' ✓':' · '+d.c+' zł')+(cnt(d.q)?'':' ⚠ brak: '+B[d.q].n),dis:d.own||money<d.c,f:()=>{money-=d.c;d.own=1}}))}
+    if(panel.k==='zone')return panel.z==='b'?bldPanel():zonePanel(panel.z);
+    if(panel.k==='review')return{t:'📝 '+REVIEWER+' – wpływ na ⭐ lokalu: '+(revMod>=0?'+':'')+revMod.toFixed(2),b:revs.length?revs.map(r=>({l:r.s.toFixed(1)+'★ · '+r.txt,dis:1,f:()=>{}})):[{l:'Brak recenzji – krytyk odwiedzi lokal po kilku obsłużonych klientach',dis:1,f:()=>{}}]};
+    if(panel.k==='staff')return staffPanel();
+    if(panel.k==='plot')return panel.p.st?{t:'🏞️ Działka ('+(panel.p.st===2?'parking':'teren')+')',b:plotMgmt(panel.p)}:plotBuy(panel.p);
+    if(panel.k==='cell')return itemPanel(panel);
+    return null}
+  function showPanel(d){const p=$('pan'),sig=d.t+d.b.map(o=>o.l+(o.dis?1:0)).join('|');
+    if(sig===psig&&p.style.display==='block')return;psig=sig;
+    selectedBuild=null;mark.visible=false;p.style.display='block';
+    p.innerHTML='<div class="hd"><span></span><button id="closePan">Zamknij</button></div><div class="bs" id="pb"></div>';
+    p.querySelector('span').textContent=d.t;
+    $('closePan').onclick=()=>{p.style.display='none';panel=null;moving=null;psig=''};
+    d.b.forEach(o=>{const b=document.createElement('button');b.textContent=o.l;b.disabled=!!o.dis;b.onclick=()=>{o.f();ui();renderPanel()};$('pb').appendChild(b)})}
+  function renderPanel(){if(panel&&panel.k==='supply')return supplyRender();const d=pdef();if(d)return showPanel(d);buildMenu()}
+  function buildMenu(){psig='';
+    const p=$('pan');p.style.display='block';
+    p.innerHTML='<div class="hd"><span>Budowa i zarządzanie</span><button id="closePan">Zamknij</button></div><div class="bs" id="buildBtns"></div>';
+    $('closePan').onclick=()=>{p.style.display='none';panel=null;selectedBuild=null;mark.visible=false};
+    const host=$('buildBtns');
+
+    const title=document.createElement('div');title.style.cssText='flex-basis:100%;font-weight:700;margin-top:5px';
+    title.textContent='🏙️ Lokal, ogródek, port, drogi i zabudowa miejska — kliknij obiekt, potem pola na mapie';
+    host.appendChild(title);
+
+    Object.entries(B).filter(([k,v])=>!(v.z==='factory'&&['assembly','robot','conveyor','press','generator','warehouse'].includes(k))).forEach(([k,v])=>{
+      const b=document.createElement('button');b.textContent=v.e+' '+v.n+' · '+v.c+' zł';
+      b.onclick=()=>{selectedBuild=k;panel={k:'build',t:k};host.querySelectorAll('button').forEach(x=>x.style.outline='');b.style.outline='2px solid var(--accent)'};
+      host.appendChild(b);
+    });
+
+    const industrial=document.createElement('div');industrial.style.cssText='flex-basis:100%;font-weight:700;margin-top:8px';
+    industrial.textContent='🏭 Przemysł — hale, maszyny i wyposażenie wnętrz';
+    host.appendChild(industrial);
+
+    Object.entries(B).filter(([k,v])=>v.z==='factory'&&['assembly','robot','conveyor','press','generator','warehouse'].includes(k)).forEach(([k,v])=>{
+      const b=document.createElement('button');b.textContent=v.e+' '+v.n+' · '+v.c+' zł';
+      b.onclick=()=>{selectedBuild=k;panel={k:'build',t:k};host.querySelectorAll('button').forEach(x=>x.style.outline='');b.style.outline='2px solid var(--accent)'};
+      host.appendChild(b);
+    });
+  }
+
+  function canBuildAt(x,y){
+    if(!selectedBuild)return false;
+    const b=B[selectedBuild];if(!b)return false;
+    const zone=IZ(selectedBuild);
+    if(zone==='factory'&&x>=30&&!industrialUnlocked)return false;
+    if(zone==='farm'||zone==='factory'){
+      const p=nPlotAt(x,y);return !!(p&&p.st===2&&!ngrid[x+','+y]);
+    }else if(zone==='port'){
+      const p=pPlotAt(x,y);return !!(p&&p.st&&!pgrid[x+','+y]);
+    }else if(['city','road','biz'].includes(zone)){
+      const p=cPlotAt(x,y);return !!(p&&p.st&&p.kind===zone&&!cgrid[x+','+y]);
+    }else{
+      return x>=0&&x<W&&y>=1&&y<GR&&!grid[y][x]&&!blocked(x,y)&&zoneOf(x,y)===zone;
+    }
+  }
+
+  function placeAt(x,y){
+    if(!selectedBuild)return;
+    const b=B[selectedBuild];if(!b||money<b.c)return;
+    const zone=IZ(selectedBuild);
+    if(zone==='factory'&&x>=30&&!industrialUnlocked){
+      pop(x,y,'🔒 Odblokuj strefę przemysłową','rgba(150,40,30,.95)',1.2);
+      return;
+    }
+    if(zone==='farm'||zone==='factory'){
+      const p=nPlotAt(x,y);if(!p||p.st!==2||ngrid[x+','+y])return;
+      ngrid[x+','+y]={t:selectedBuild,u:{},rot:0};money-=b.c;syncNCell(x,y);
+    }else if(zone==='port'){
+      const p=pPlotAt(x,y);if(!p||!p.st||pgrid[x+','+y])return;
+      pgrid[x+','+y]={t:selectedBuild,u:{},rot:0};money-=b.c;syncPCell(x,y);
+    }else if(['city','road','biz'].includes(zone)){
+      const p=cPlotAt(x,y);if(!p||!p.st||p.kind!==zone||cgrid[x+','+y])return;
+      cgrid[x+','+y]={t:selectedBuild,u:{},rot:0};money-=b.c;syncCCell(x,y);
+    }else{
+      if(x<0||x>=W||y<1||y>=GR||grid[y][x]||blocked(x,y)||zoneOf(x,y)!==zone)return;
+      grid[y][x]={t:selectedBuild,u:{},rot:orient(x,y,selectedBuild)};money-=b.c;syncCell(x,y);
+    }
+    ui();
+  }
+
+  /* ---------- OBSŁUGA GESTÓW KAMERY I KLIKNIĘĆ NA SCENIE ---------- */
+  const raycaster=new THREE.Raycaster(),pointer=new THREE.Vector2();
+  const activePointers=new Map();
+  let camDrag={active:false,moved:false,mode:'orbit',sx:0,sy:0,lx:0,ly:0,pinchDist:0};
+
+  cv.addEventListener('contextmenu',e=>e.preventDefault());
+  cv.addEventListener('wheel',e=>{
+    e.preventDefault();
+    const step=Math.sign(e.deltaY)*Math.max(1.2,camCtrl.tdist*0.1);
+    camCtrl.tdist=clamp(camCtrl.tdist+step,6,95);
+  },{passive:false});
+
+  function updateHoverTile(clientX,clientY){
+    if(!selectedBuild){mark.visible=false;return}
+    const r=cv.getBoundingClientRect();
+    pointer.x=((clientX-r.left)/r.width)*2-1;
+    pointer.y=-((clientY-r.top)/r.height)*2+1;
+    raycaster.setFromCamera(pointer,camera);
+    const hits=raycaster.intersectObject(gnd);
+    if(!hits.length){mark.visible=false;return}
+    const pt=hits[0].point,x=Math.floor(pt.x),z=Math.floor(pt.z);
+    mark.visible=true;
+    mark.position.set(x+.5,IZ(selectedBuild)==='port'?0.08:0.03,z+.5);
+    mark.material.color.set(canBuildAt(x,z)?'#2ecc71':'#e74c3c');
+  }
+
+  function handleSceneClick(clientX,clientY){
+    const r=cv.getBoundingClientRect();
+    pointer.x=((clientX-r.left)/r.width)*2-1;
+    pointer.y=-((clientY-r.top)/r.height)*2+1;
+    raycaster.setFromCamera(pointer,camera);
+    const hits=raycaster.intersectObject(gnd);
+    if(!hits.length)return;
+    const pt=hits[0].point,x=Math.floor(pt.x),z=Math.floor(pt.z);
+    if(selectedBuild){placeAt(x,z);updateHoverTile(clientX,clientY);return}
+    if(moving){if(tryMove(x,z)){const mv=moving;moving=null;panel={k:'cell',x,z}}renderPanel();return}
+    const kh=raycaster.intersectObject(kiosk,true)[0];
+    if(kh&&kh.distance<hits[0].distance){panel={k:'menu'};renderPanel();return}
+    if(cellAt(x,z)){panel={k:'cell',x,z};renderPanel();return}
+    const wh=raycaster.intersectObjects(zg.children.concat(wallW.children,wallE.children),true)[0];
+    if(wh&&wh.distance<hits[0].distance&&wh.object.userData.wz){panel={k:'zone',z:wh.object.userData.wz};renderPanel();return}
+    const np=nPlotAt(x,z),pp=pPlotAt(x,z),cp=cPlotAt(x,z),pl=plotAt(x,z);
+    if(np&&!np.st&&Number(np.id.split('_')[1])>=6&&!industrialUnlocked){pop(x,z,'Najpierw odblokuj strefę przemysłową');return}
+    if(np&&!np.st&&money>=np.c){money-=np.c;np.st=2;nPlotVis(np);ui();return}
+    if(pp&&!pp.st&&money>=pp.c){money-=pp.c;pp.st=1;pPlotVis(pp);ui();return}
+    if(cp&&!cp.st){const rq=cp.req&&CPL.find(q=>q.id===cp.req);if(rq&&!rq.st){pop(x,z,'Najpierw kup: '+(rq.nm||rq.id),'rgba(150,40,30,.95)',1.2);return}if(money>=cp.c){money-=cp.c;cp.st=2;cPlotVis(cp);ui()}else pop(x,z,'Potrzeba '+cp.c+' zł');return}
+    if(pl){panel={k:'plot',p:pl};renderPanel()}
+  }
+
+  cv.addEventListener('pointerdown',e=>{
+    cv.setPointerCapture(e.pointerId);
+    activePointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(activePointers.size===1){
+      const isPan=e.button===2||e.button===1||e.shiftKey;
+      camDrag={active:true,moved:false,mode:isPan?'pan':'orbit',sx:e.clientX,sy:e.clientY,lx:e.clientX,ly:e.clientY,pinchDist:0};
+    }else if(activePointers.size===2){
+      const pts=[...activePointers.values()];
+      camDrag.mode='pinch';
+      camDrag.moved=true;
+      camDrag.pinchDist=Math.hypot(pts[1].x-pts[0].x,pts[1].y-pts[0].y);
+      camDrag.lx=(pts[0].x+pts[1].x)/2;
+      camDrag.ly=(pts[0].y+pts[1].y)/2;
+    }
+  });
+
+  cv.addEventListener('pointermove',e=>{
+    updateHoverTile(e.clientX,e.clientY);
+    if(!activePointers.has(e.pointerId))return;
+    activePointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(activePointers.size===2){
+      const pts=[...activePointers.values()];
+      const dist=Math.hypot(pts[1].x-pts[0].x,pts[1].y-pts[0].y);
+      const mx=(pts[0].x+pts[1].x)/2, my=(pts[0].y+pts[1].y)/2;
+      if(camDrag.pinchDist>0){
+        const ratio=camDrag.pinchDist/Math.max(10,dist);
+        camCtrl.tdist=clamp(camCtrl.tdist*ratio,6,95);
+      }
+      panCameraByPixels(mx-camDrag.lx,my-camDrag.ly);
+      camDrag.pinchDist=dist;camDrag.lx=mx;camDrag.ly=my;camDrag.moved=true;
+      return;
+    }
+    if(!camDrag.active)return;
+    const dx=e.clientX-camDrag.lx, dy=e.clientY-camDrag.ly;
+    if(Math.hypot(e.clientX-camDrag.sx,e.clientY-camDrag.sy)>6)camDrag.moved=true;
+    if(camDrag.moved){
+      if(camDrag.mode==='pan'){
+        panCameraByPixels(dx,dy);
+      }else{
+        camCtrl.tyaw-=dx*0.0075;
+        camCtrl.tpitch=clamp(camCtrl.tpitch+dy*0.0065,0.18,1.42);
+      }
+    }
+    camDrag.lx=e.clientX;camDrag.ly=e.clientY;
+  });
+
+  function endPointer(e){
+    const wasClick=activePointers.size===1&&camDrag.active&&!camDrag.moved&&e.button!==2;
+    activePointers.delete(e.pointerId);
+    if(activePointers.size===0){
+      camDrag.active=false;
+      if(wasClick&&e.type==='pointerup')handleSceneClick(e.clientX,e.clientY);
+    }else if(activePointers.size===1){
+      const rem=[...activePointers.values()][0];
+      camDrag.mode='orbit';camDrag.lx=rem.x;camDrag.ly=rem.y;camDrag.pinchDist=0;
+    }
+  }
+  cv.addEventListener('pointerup',endPointer);
+  cv.addEventListener('pointercancel',endPointer);
+
+  const REVIEWER='Krytyk Kulinarny';
+  function doReview(c,angry){
+    const q=cust.filter(x=>QS.includes(x.st)).length,nc=staff.filter(x=>x.t==='c').length,nw=staff.length-nc;
+    const sp=angry?0:Math.max(0,Math.min(1,1-((c.tw||0)-20000)/50000)),
+      fd=Math.min(1,(ks()-1)/3.5)*.5+Math.min(1,kq()/.8)*.2+Math.min(1,D.filter(d=>d.own).length/8)*.3,
+      hy=(cnt('loo')?.4:0)+(cnt('sink')?.3:0)+(cnt('dryer')?.3:0),
+      at=Math.min(1,cnt('plant')*.2+(cnt('arcade')+cnt('karaoke'))*.2+att()*.3),
+      sv=Math.min(1,(nc+nw)/8)*.5+(1-Math.min(1,q/8))*.5;
+    const sc=[[sp,'obsługa żółwim tempem – czekałem wieki'],[fd,'kuchnia bez polotu, za mało dań i sprzętu'],[hy,'toalety nie spełniają standardów'],[at,'wnętrze bez klimatu – brak roślin i atrakcji'],[sv,'za mało personelu, wszędzie tłok']];
+    const o=angry?0:.3*sp+.3*fd+.15*hy+.1*at+.15*sv,st=angry?1:Math.round((1+4*o)*2)/2,w=sc.slice().sort((a,b)=>a[0]-b[0])[0];
+    const txt=angry?'Wyszedłem bez jedzenia – nikt się mną nie zajął.':st>=4?'Szybko, smacznie i czysto – polecam!':st>=3?'Przyzwoicie, ale '+w[1]+'.':w[1].charAt(0).toUpperCase()+w[1].slice(1)+'.';
+    revMod=(st-3)*.35;revs.unshift({s:st,txt});revs.splice(6);
+    pop(c.x,c.y,'📝 '+st.toFixed(1)+'★ '+(st>=4?'🎉':st<3?'💢':''),'rgba(60,40,90,.92)',1.5);ui();
+  }
+  function revTick(dt){
+    revMod-=revMod*dt/1000/200;revT-=dt;
+    if(revT<=0){
+      if(served<5||cust.some(c=>c.rev)){revT=10000;return}
+      const c=spawnC(0);
+      if(c){c.rev=1;revT=150000+Math.random()*90000;pop(c.x,c.y,'📝 '+REVIEWER+' w lokalu!','rgba(60,40,90,.92)',1.4)}else revT=10000;
+    }
+  }
+  function spawnC(vip,ox,oy){
+    const l=cells(vip===2?'gtable':vip?'vip':'table').filter(c=>!taken[c[0]+','+c[1]]);if(!l.length)return;
+    const s=pk(l);taken[s[0]+','+s[1]]=1;
+    const r=s[2].rot||0,o=vip===1?-.12:.42;
+    const nc=({x:ox===undefined?DOORS[0]+.5+Math.random():ox,y:oy===undefined?edgeY():oy,tx:s[0]+.5+Math.sin(r)*o,ty:s[1]+.5+Math.cos(r)*o,sr:vip===1?r:r+Math.PI,k:s[0]+','+s[1],cell:s[2],st:'in',tm:0,vip:vip===1,gd:vip===2});cust.push(nc);return nc;
+  }
+  const kp=s=>{const k=kc();if(k.length){const it=pk(k),r=it[2].rot||0;s.gx=it[0]+.5+Math.sin(r)*.55;s.gy=it[1]+.5+Math.cos(r)*.55}else{s.gx=1.5+LX;s.gy=3.8}};
+  function staffTick(dt){
+    const sf=1+.2*train;
+    for(const s of staff){
+      s.spd=3.2*sf;
+      if(s.t==='c'){
+        if(!s.job){
+          const c=cust.filter(c=>c.st==='q'&&!c.busy).sort((a,b)=>b.w-a.w)[0];
+          if(c){c.busy=1;c.st='ck';s.job=c;s.tm=-1;kp(s)}
+          else{s.it-=dt;if(s.it<=0){kp(s);s.it=2500+Math.random()*2500}}
+        }
+        if(s.gx!==undefined&&walk(s,s.gx,s.gy,dt)&&s.job){
+          if(s.tm<0)s.tm=5500/ks()/sf;
+          s.tm-=dt;
+          if(s.tm<=0){
+            if(!takeSupply(s.job.o)){s.job.o.s=0;pop(s.x,s.y,'❌ brak składników','rgba(180,40,40,.9)',1.2)}
+            s.job.st='rd';s.job.busy=0;s.job.w=0;s.job.ang=0;s.job=null;
+          }
+        }
+      }else if(!s.job){
+        const c=cust.find(c=>c.st==='rd'&&!c.busy)||cust.filter(c=>c.st==='w1'&&!c.busy).sort((a,b)=>b.w-a.w)[0];
+        if(c){c.busy=1;s.job=c;s.k=c.st==='rd'?'d':'o';s.lg=s.k==='d'?0:1;s.tm=-1}
+        else go(s,s.hx,s.hy,dt);
+      }else{
+        const c=s.job;
+        if(s.lg===0){if(go(s,ZB.KW+.7,KY+.6,dt))s.lg=1}
+        else if(go(s,c.tx+.4,c.ty+.2,dt)){
+          if(s.tm<0)s.tm=(s.k==='o'?1500:900)/sf;
+          s.tm-=dt;
+          if(s.tm<=0){c.busy=0;c.w=0;c.ang=0;
+            if(s.k==='o'){c.o=order();c.st='q';pop(c.x,c.y,c.o.em,'rgba(0,0,0,.65)')}
+            else{c.st='eat';c.tm=(c.vip?5000:3500)*(1-.12*U(c.cell,'ch'))}
+            s.job=null}
+        }
+      }
+    }
+  }
+  function parkTick(dt){
+    if(cnt('pspot')){pcsp-=dt;if(pcsp<=0){pcsp=9000/(rating()*(1+cnt('pspot')*.1)*pm()*cityTrafficMult());
+      const fr=cells('pspot').filter(q=>!pcs.some(c=>c.st!=='out'&&c.k===q[0]+','+q[1]));
+      if(fr.length){const q=pk(fr);pcs.push({x:q[0]+.5,y:edgeY()+7,sy:q[1]+.5,k:q[0]+','+q[1],cell:q[2],st:'in',tm:0,col:pk(['#e63946','#457b9d','#f4a261','#2a9d8f','#6a4c93','#eeeeee'])})}}}
+    for(const c of pcs){
+      if(c.st==='in'){c.y-=dt/1000*4;if(c.y<=c.sy){c.y=c.sy;c.st='park';c.tm=9000+Math.random()*7000;
+        const ms=cells('meter');
+        if(ms.length){const m=pk(ms),f=Math.round(6*(1+.2*U(c.cell,'rf'))*(1+.25*U(m[2],'ct')+.3*U(m[2],'tf')));money+=f;pop(c.x,c.y,'🅿️ +'+f+' zł');ui()}
+        else pop(c.x,c.y,'🅿️ brak parkomatu','rgba(90,90,90,.9)',1.2);
+        if(Math.random()<.7)spawnC(0,c.x,c.y)}}
+      else if(c.st==='park'){c.tm-=dt;if(c.tm<=0)c.st='out'}
+      else c.y+=dt/1000*4;
+    }
+    pcs=pcs.filter(c=>{if(c.y<edgeY()+9)return 1;if(c.m)scene.remove(c.m);return 0});
+  }
+  function update(dt){
+    supplyTick(dt);
+    const trMult=cityTrafficMult()*cityAdBonus();
+    sp-=dt;if(sp<=0){sp=3500/(rating()*trMult);spawnC(0)}
+    asp-=dt;if(asp<=0){asp=(3000+Math.random()*4000)/Math.min(2.2,trMult);amb.push({x:W+12,col:pk(['#e63946','#457b9d','#f4a261','#2a9d8f','#6a4c93','#eeeeee'])})}
+    amb.forEach(a=>a.x-=dt/1000*4);amb=amb.filter(a=>{if(a.x>-14)return 1;if(a.m)scene.remove(a.m);return 0});
+    staffTick(dt);parkTick(dt);hwyTick(dt);revTick(dt);mood=Math.max(0,mood-dt*.00002);hudT-=dt;if(hudT<=0){hudT=500;ui()}
+    if(cnt('vip')){vsp-=dt;if(vsp<=0){vsp=9000/((1+cnt('arcade')*.3+cnt('karaoke')*.3)*cityVipMult());spawnC(1)}}
+    if(cnt('gtable')){gsp-=dt;if(gsp<=0){gsp=5000/(rating()*trMult)/(1+att()*.3);spawnC(2)}}
+    if(cnt('drive')){csp-=dt;if(csp<=0){const wi=pk(cells('drive'));csp=5000/(sum('drive',c=>1+.2*U(c,'sp'))*rating()*trMult);cars.push({x:-3,wx:wi[0]+.5,cell:wi[2],st:'go',tm:0})}}
+    for(const c of cust){
+      if(c.st==='in'){if(go(c,c.tx,c.ty,dt)){c.st='w1';c.w=0;c.ang=0;pop(c.x,c.y,'🙋','rgba(0,0,0,.65)')}}
+      else if(QS.includes(c.st)){c.w+=dt;c.tw=(c.tw||0)+dt;if(c.w>PAT*.6&&!c.ang){c.ang=1;pop(c.x,c.y,'😠','rgba(200,120,0,.9)',1.4)}if(c.w>PAT&&!c.busy){delete taken[c.k];c.st='out';mood+=.15;pop(c.x,c.y,'😡 za długo','rgba(180,40,40,.9)',1.6);if(c.rev)doReview(c,1)}}
+      else if(c.st==='eat'){
+        c.tm-=dt;
+        if(c.tm<=0){
+          let pay=c.o.s*tmult(c.cell)*(1+cb())*(1+pb());
+          if(c.vip)pay*=4*(1+ent());if(c.gd)pay*=1.3*(1+att());pay*=1+kq();
+          const wc=cells('loo');
+          if(Math.random()<.4){
+            if(wc.length){const s=cells('sink'),d=cells('dryer');c.path=[pk(wc)];if(s.length)c.path.push(pk(s));if(d.length)c.path.push(pk(d));c.tip=0;c.st='wc';c.tm=-1}
+            else{pay*=.5;pop(c.x,c.y,'😡 brak toalety','rgba(180,40,40,.9)',1.6);c.st='out'}
+          }else c.st='out';
+          pay=Math.round(pay);money+=pay;served++;pop(c.x,c.y,'+'+pay+' zł');
+          delete taken[c.k];if(c.rev)doReview(c,0);ui();
+        }
+      }
+      else if(c.st==='wc'){
+        const p=c.path[0],u=p[2];
+        if(go(c,p[0]+.5+Math.sin(u.rot||0)*.55,p[1]+.5+Math.cos(u.rot||0)*.55,dt)){
+          c.sr=(u.rot||0)+Math.PI;c.fa=1;
+          if(c.tm<0)c.tm=u.t==='loo'?1400*(1-.2*U(u,'fl')):u.t==='sink'?900:800*(1-.2*U(u,'pw'));
+          c.tm-=dt;
+          if(c.tm<=0){
+            c.tip+=u.t==='loo'?5+2*U(u,'sd'):u.t==='sink'?4+2*U(u,'tp')+2*U(u,'so'):3;
+            c.path.shift();c.tm=-1;c.fa=0;
+            if(!c.path.length){money+=c.tip;pop(c.x,c.y,'+'+c.tip+' napiwek');c.st='out';ui()}
+          }
+        }
+      }
+      else if(go(c,DOORS[1],edgeY(),dt))c.dead=1;
+    }
+    cust=cust.filter(c=>{if(c.dead){if(c.m)scene.remove(c.m);return 0}return 1});
+    for(const k of cars){
+      if(k.st==='go'){k.x+=dt/1000*3;if(k.x>=k.wx){k.x=k.wx;k.st='wait';k.tm=1300*(1-.15*U(k.cell,'fa'))}}
+      else if(k.st==='wait'){k.tm-=dt;if(k.tm<=0){const o=order(),ok=takeSupply(o);const p=ok?Math.round(o.s*1.2*(1+.1*U(k.cell,'fa'))*(1+cb())):0;money+=p;if(ok)served++;pop(k.x,.5,ok?o.em+' +'+p:'❌ brak składników',ok?undefined:'rgba(180,40,40,.9)');k.st='leave';ui()}}
+      else k.x+=dt/1000*3;
+    }
+    cars=cars.filter(k=>{if(k.x<W+3)return 1;if(k.m)scene.remove(k.m);return 0});
+    fl.forEach(f=>{f.life-=dt;f.s.position.y+=dt/1000*.7;f.s.material.opacity=Math.min(1,f.life/500)});
+    fl=fl.filter(f=>{if(f.life>0)return 1;scene.remove(f.s);f.s.material.map.dispose();f.s.material.dispose();return 0});
+  }
+  function sync(t){
+    for(const c of cust){
+      if(!c.m){c.m=custMesh(c.vip);scene.add(c.m);if(c.rev){const l=lab('📝 '+REVIEWER,'rgba(60,40,90,.92)');l.position.set(0,1.25,0);c.m.add(l);c.m.scale.multiplyScalar(1.15)}}
+      const dx=c.x-(c.lx===undefined?c.x:c.lx),dz=c.y-(c.ly===undefined?c.y:c.ly);
+      if(sits(c)||c.fa)c.m.rotation.y=c.sr;else if(Math.hypot(dx,dz)>.001)c.m.rotation.y=Math.atan2(dx,dz);
+      c.lx=c.x;c.ly=c.y;
+      c.m.position.set(c.x,sits(c)?-.1:Math.abs(Math.sin(t*.012+c.x*5))*.03,c.y);
+    }
+    for(const k of cars){if(!k.m){k.m=carMesh();scene.add(k.m)}k.m.position.set(k.x,0,.5)}
+    for(const a of amb){if(!a.m){a.m=carMesh();a.m.children[0].material.color.set(a.col);a.m.rotation.y=Math.PI;scene.add(a.m)}a.m.position.set(a.x,0,-.5)}
+    for(const q of staff){if(!q.m){q.m=q.t==='c'?chefMesh():waiterMesh();scene.add(q.m)}const hx=q.x-(q.lx===undefined?q.x:q.lx),hz=q.y-(q.ly===undefined?q.y:q.ly);if(Math.hypot(hx,hz)>.001)q.m.rotation.y=Math.atan2(hx,hz);q.lx=q.x;q.ly=q.y;q.m.position.set(q.x,Math.abs(Math.sin(t*.008))*.02,q.y)}
+    for(const c of pcs){if(!c.m){c.m=carMesh();c.m.children[0].material.color.set(c.col);c.m.rotation.y=Math.PI/2;scene.add(c.m)}c.m.position.set(c.x,0,c.y)}
+    const workCells=nCells('assembly').concat(nCells('mill'),nCells('meatproc'),nCells('fryline'),nCells('bottler'));
+    const workerSlots=[];
+    workCells.forEach(([x,z])=>{workerSlots.push([x+.28,z+.3],[x+.72,z+.7])});
+    const visibleWorkers=Math.min(industrialEmployees,workerSlots.length);
+    window._factoryPeople=window._factoryPeople||[];
+    while(window._factoryPeople.length<visibleWorkers){const m=chefMesh();m.children.forEach(o=>{if(o.material&&o.material.color)o.material.color.set('#ef6c00')});scene.add(m);window._factoryPeople.push(m)}
+    window._factoryPeople.forEach((m,i)=>{
+      m.visible=i<visibleWorkers;
+      if(i<visibleWorkers){const q=workerSlots[i];m.position.set(q[0],Math.abs(Math.sin(t*.006+i))*.025,q[1])}
+    });
+    for(const k in pMeshes){
+      const m=pMeshes[k];
+      if(m.userData.btype==='boat'){
+        m.position.y=0.06+Math.sin(t*0.003+m.position.x)*0.025;
+        m.rotation.z=Math.sin(t*0.0025+m.position.z)*0.05;
+      }
+    }
+  }
+  function loop(ts){
+    try{
+      const dt=Math.min(ts-last,100);
+      last=ts;
+      update(dt);
+      sync(ts);
+      doors();
+      camTick(dt);
+      cam();
+      walls();
+      renderer.render(scene,camera);
+    }catch(err){
+      console.error('Błąd renderowania gry:',err);
+      const box=document.getElementById('renderError');
+      if(box){
+        box.style.display='block';
+        box.textContent='Błąd renderowania: '+(err&&err.message?err.message:String(err));
+      }
+    }
+    requestAnimationFrame(loop);
+  }
+
+  [['grill',1,2],['fryer',2,2],['drinks',3,3],['fridge',0,3]].forEach(a=>{grid[a[2]][a[1]]={t:a[0],u:{},rot:orient(a[1],a[2],a[0])};syncCell(a[1],a[2])});
+  $('rvb').onclick=()=>{panel={k:'review'};setMark();renderPanel(true)};
+  $('stb').onclick=()=>{panel={k:'staff'};setMark();renderPanel(true)};
+  $('sup').onclick=()=>{moving=null;selectedBuild=null;panel={k:'supply'};setMark();psig='';renderPanel()};
+  $('bb').onclick=()=>{panel={k:'zone',z:'b'};setMark();renderPanel(true)};
+  $('jmp').onclick=()=>{
+    if(camCtrl.tz>-6){camCtrl.tz=-18;camCtrl.tx=15}
+    else{camCtrl.tz=9;camCtrl.tx=W/2}
+  };
+  $('prt').onclick=()=>{camCtrl.tz=11;camCtrl.tx=-10};
+  $('cty').onclick=()=>{camCtrl.tz=-7;camCtrl.tx=6};
+  const hwBtn=document.createElement('button');hwBtn.textContent='🛣️ Autostrada';$('tb').appendChild(hwBtn);hwBtn.onclick=()=>{camCtrl.tx=80;camCtrl.tz=0;camCtrl.tdist=Math.max(camCtrl.tdist,42)};
+  $('vu').onclick=()=>{camCtrl.tz=clamp(camCtrl.tz-4,-35,45)};
+  $('vd').onclick=()=>{camCtrl.tz=clamp(camCtrl.tz+4,-35,45)};
+  $('camReset').onclick=resetCam;
+  $('bm').onclick=()=>{moving=null;panel={k:'build'};renderPanel()};
+
+  const industrialBtn=document.createElement('button');
+  industrialBtn.id='industryUnlock';industrialBtn.textContent='🏭 Przemysł';
+  $('tb').appendChild(industrialBtn);
+  industrialBtn.onclick=()=>{
+    if(industrialUnlocked){camCtrl.tz=-21;camCtrl.tx=39;return}
+    const cost=1800;
+    if(money<cost){pop(35,-20,'Potrzeba '+cost+' zł');return}
+    money-=cost;industrialUnlocked=true;
+    NPL.filter(p=>Number(p.id.split('_')[1])>=6).forEach(p=>{p.st=2;nPlotVis(p)});
+    industrialBtn.textContent='🏭 Przemysł ✓';
+    camCtrl.tz=-21;camCtrl.tx=39;ui();
+    pop(39,-20,'Strefa przemysłowa odblokowana!','rgba(30,120,60,.95)',1.3);
+  };
+
+  const roadHint=document.createElement('button');
+  roadHint.textContent='🛣️ Droga';
+  $('tb').appendChild(roadHint);
+  roadHint.onclick=()=>{
+    selectedBuild='roadseg';panel={k:'build',t:'roadseg'};
+    pop(camCtrl.tx,camCtrl.tz,'Przeciągaj po polach, aby rysować ulicę');
+    renderPanel();
+  };
+  let roadDragLast='';
+  cv.addEventListener('pointermove',e=>{
+    if(!e.buttons||!selectedBuild||B[selectedBuild]?.z!=='road')return;
+    const r=cv.getBoundingClientRect();
+    pointer.x=((e.clientX-r.left)/r.width)*2-1;
+    pointer.y=-((e.clientY-r.top)/r.height)*2+1;
+    raycaster.setFromCamera(pointer,camera);
+    const hit=raycaster.intersectObject(gnd)[0];if(!hit)return;
+    const x=Math.floor(hit.point.x),z=Math.floor(hit.point.z),key=x+','+z;
+    if(key===roadDragLast)return;roadDragLast=key;
+    placeAt(x,z);
+  });
+  cv.addEventListener('pointerup',()=>{roadDragLast=''});
+
+  ui();
+  requestAnimationFrame(t=>{last=t;loop(t)});
+
+} catch (err) {
+  console.error(err);
+  const box = document.getElementById("renderError");
+  if (box) {
+    box.style.display = "block";
+    box.textContent = "Błąd inicjalizacji: " + (err && err.message ? err.message : String(err));
+  }
+}
+})();
+</script>
+</body>
+</html>
